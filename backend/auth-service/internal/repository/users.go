@@ -163,7 +163,7 @@ func (r *UserRepository) authoritiesForRole(ctx context.Context, roleID int64) (
 	rows, err := r.pool.Query(ctx, `
 		SELECT a.id, a.name, a.created_at, a.updated_at, a.deleted_at
 		FROM authorities a
-		JOIN authorites_roles ar ON ar.authority_id = a.id
+		JOIN authorities_roles ar ON ar.authority_id = a.id
 		WHERE ar.role_id=$1 AND a.deleted_at IS NULL
 		ORDER BY a.name
 	`, roleID)

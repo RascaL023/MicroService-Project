@@ -141,7 +141,7 @@ func (r *RoleRepository) Create(ctx context.Context, name string, authorityIDs [
 	}
 
 	for _, authorityID := range authorityIDs {
-		if _, err := tx.Exec(ctx, `INSERT INTO authorites_roles (role_id, authority_id) VALUES ($1, $2)`, role.ID, authorityID); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO authorities_roles (role_id, authority_id) VALUES ($1, $2)`, role.ID, authorityID); err != nil {
 			return entity.Role{}, err
 		}
 	}
@@ -155,7 +155,7 @@ func (r *RoleRepository) authoritiesForRole(ctx context.Context, roleID int64) (
 	rows, err := r.pool.Query(ctx, `
 		SELECT a.id, a.name, a.created_at, a.updated_at, a.deleted_at
 		FROM authorities a
-		JOIN authorites_roles ar ON ar.authority_id = a.id
+		JOIN authorities_roles ar ON ar.authority_id = a.id
 		WHERE ar.role_id=$1 AND a.deleted_at IS NULL
 		ORDER BY a.name
 	`, roleID)
