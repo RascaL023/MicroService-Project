@@ -10,12 +10,30 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const createSessionScript = `
+const (
+	createSessionScript = `
 redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[3])
 redis.call("SADD", KEYS[2], ARGV[2])
 redis.call("PEXPIRE", KEYS[2], ARGV[3])
 return 1
 `
+	deleteSessionScript = `
+local session = redis.call("GET", KEYS[1])
+if not session then
+	return 0
+end
+
+local data = cjson.decode(session)
+local userID = data.userId or data.subject
+
+redis.call("DEL", KEYS[1])
+if userID then
+	redis.call("SREM", "user:" .. userID .. ":sessions", ARGV[1])
+end
+
+return 1
+`
+)
 
 type Session struct {
 	Subject     int64     `json:"subject"`
@@ -53,10 +71,10 @@ func (r *SessionRepository) Create(ctx context.Context, token string, session Se
 	return r.client.Eval(
 		ctx,
 		createSessionScript,
-		[]string{r.key(token), r.userSessionsKey(session.Subject)}, // keys
-		payload, // args1
-		token, // args2
-		strconv.FormatInt(ttl.Milliseconds(), 10), // args3
+		[]string{r.key(token), r.userSessionsKey(session.Subject)},
+		payload,
+		token,
+		strconv.FormatInt(ttl.Milliseconds(), 10),
 	).Err()
 }
 
@@ -81,7 +99,16 @@ func (r *SessionRepository) Get(ctx context.Context, token string) (Session, err
 }
 
 func (r *SessionRepository) Delete(ctx context.Context, token string) error {
-	return r.client.Del(ctx, r.key(token)).Err()
+	deleted, err := r.client.Eval(
+		ctx,
+		deleteSessionScript,
+		[]string{r.key(token)},
+		token,
+	).Int()
+	if err != nil { return err }
+	if deleted == 0 { return ErrNotFound }
+
+	return nil
 }
 
 func (r *SessionRepository) key(token string) string {

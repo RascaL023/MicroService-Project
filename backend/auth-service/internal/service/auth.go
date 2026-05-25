@@ -37,52 +37,41 @@ func NewAuthService(
 }
 
 func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (response.LoginResponse, error) {
-	if len(req.Username) == 0 || len(req.Password) < 8 {
+	if len(req.Username) == 0 || len(req.Password) == 0 {
 		return response.LoginResponse{}, ErrValidation
 	}
 
 	user, err := s.users.FindByUsername(ctx, req.Username)
 	if errors.Is(err, repository.ErrNotFound) {
-		return response.LoginResponse{}, ErrUnauthorized
-	}
-	if err != nil {
-		return response.LoginResponse{}, err
+		return response.LoginResponse{}, ErrWrongCredentials
 	}
 
-	if user.IsBanned {
-		return response.LoginResponse{}, ErrForbidden
-	}
+	if err != nil { return response.LoginResponse{}, err }
+
+	if user.IsBanned { return response.LoginResponse{}, ErrForbidden }
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.HashPassword),
 		[]byte(req.Password),
-	); err != nil {
-		return response.LoginResponse{}, ErrUnauthorized
-	}
+	); err != nil { return response.LoginResponse{}, ErrWrongCredentials }
 
 	roles, permissions := collectGrants(user)
 	var tokenType, token string
 	if s.cfg.AuthMode == "stateful" {
-		tokenType = "Bearer"
-		token, err = randomToken()
-		if err != nil {
-			return response.LoginResponse{}, err
-		}
+		tokenType = "Session"
+		token, err = generateRandomToken()
+		if err != nil { return response.LoginResponse{}, err }
 
 		if err := s.sessions.Create(ctx, token, repository.Session{
 			Subject:     user.ID,
 			Username:    user.Username,
 			Roles:       roles,
 			Authorities: permissions,
-		}, s.cfg.SessionTTL); err != nil {
-			return response.LoginResponse{}, err
-		}
+		}, s.cfg.SessionTTL); err != nil { return response.LoginResponse{}, err }
 
 	} else {
 		tokenType = "Bearer"
 		token, err = s.jwtToken(user.ID, roles, permissions)
-		if err != nil {
-			return response.LoginResponse{}, err
-		}
+		if err != nil { return response.LoginResponse{}, err }
 	}
 
 	return response.LoginResponse{
@@ -93,6 +82,17 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (resp
 		TokenType:   tokenType,
 		AccessToken: token,
 	}, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, error) {
+	_, token := splitAuth(authHeader)
+	if token == "" { return "", ErrUnauthorized }
+	if err := s.sessions.Delete(ctx, token); err != nil {
+		if errors.Is(err, repository.ErrNotFound) { return "", ErrUnauthorized }
+		return "", err
+	}
+
+	return "Logout success", nil
 }
 
 func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (entity.User, []string, []string, error) {
@@ -172,7 +172,7 @@ func collectGrants(user entity.User) ([]string, []string) {
 	return roles, permissions
 }
 
-func randomToken() (string, error) {
+func generateRandomToken() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err

@@ -45,6 +45,7 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 	router.Route("/api/auths", func(r chi.Router) {
 		r.Post("/login", server.login)
 		r.Post("/register", server.register)
+		r.Post("/logout", server.logout)
 		r.With(server.requireRole("ADMIN")).Get("/test", server.test)
 	})
 
@@ -71,7 +72,13 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loginResponse, err := s.authSvc.Login(r.Context(), req)
+
 	respond(w, http.StatusOK, loginResponse, err)
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	message, err := s.authSvc.Logout(r.Context(), r.Header.Get("Authorization"))
+	respond(w, http.StatusOK, message, err)
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
@@ -197,17 +204,19 @@ func respond(w http.ResponseWriter, status int, data any, err error) {
 	}
 	switch {
 	case errors.Is(err, service.ErrValidation):
-		writeError(w, http.StatusBadRequest, "request tidak valid")
+		writeError(w, http.StatusBadRequest, "Request tidak valid")
+	case errors.Is(err, service.ErrWrongCredentials):
+		writeError(w, http.StatusUnauthorized, "Username/password salah")
 	case errors.Is(err, service.ErrUnauthorized):
-		writeError(w, http.StatusUnauthorized, "username atau password salah")
+		writeError(w, http.StatusUnauthorized, "Anda belum login")
 	case errors.Is(err, service.ErrForbidden):
-		writeError(w, http.StatusForbidden, "forbidden")
+		writeError(w, http.StatusForbidden, "Anda tidak mempunyai akses")
 	case errors.Is(err, repository.ErrNotFound):
-		writeError(w, http.StatusNotFound, "data tidak ditemukkan")
+		writeError(w, http.StatusNotFound, "Data tidak ditemukkan")
 	case errors.Is(err, repository.ErrDuplicate):
-		writeError(w, http.StatusConflict, "data telah terdaftar")
+		writeError(w, http.StatusConflict, "Data telah terdaftar")
 	default:
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		writeError(w, http.StatusInternalServerError, "Internal server error")
 	}
 }
 
