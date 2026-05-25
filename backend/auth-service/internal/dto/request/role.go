@@ -1,6 +1,6 @@
 package request
 
 type RoleRequest struct {
-	Role         string  `json:"role"`
+	Name         string  `json:"name"`
 	AuthorityIDs []int64 `json:"authorityIds"`
 }

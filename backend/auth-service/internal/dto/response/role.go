@@ -4,7 +4,7 @@ import "time"
 
 type RoleResponse struct {
 	ID          int64     `json:"id"`
-	Role        string    `json:"role"`
+	Name        string    `json:"name"`
 	CreatedAt   time.Time `json:"createdAt"`
 	Authorities []string  `json:"authorities,omitempty"`
 }

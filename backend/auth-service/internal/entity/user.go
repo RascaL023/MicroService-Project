@@ -8,5 +8,7 @@ type User struct {
 	HashPassword string
 	IsBanned     bool
 	CreatedAt    time.Time
+	UpdatedAt    *time.Time
+	DeletedAt    *time.Time
 	Roles        []Role
 }

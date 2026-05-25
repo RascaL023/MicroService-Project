@@ -6,11 +6,16 @@ import (
 )
 
 func ToRoleResponse(role entity.Role) response.RoleResponse {
+	authorities := make([]string, 0, len(role.Authorities))
+	for _, authority := range role.Authorities {
+		authorities = append(authorities, authority.Name)
+	}
+
 	return response.RoleResponse{
 		ID:          role.ID,
-		Role:        role.Role,
+		Name:        role.Name,
 		CreatedAt:   role.CreatedAt,
-		Authorities: role.Authorities,
+		Authorities: authorities,
 	}
 }
 

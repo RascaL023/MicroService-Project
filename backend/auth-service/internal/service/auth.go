@@ -141,14 +141,14 @@ func collectGrants(user entity.User) ([]string, []string) {
 	roles := make([]string, 0)
 	permissions := make([]string, 0)
 	for _, role := range user.Roles {
-		if !roleSeen[role.Role] {
-			roleSeen[role.Role] = true
-			roles = append(roles, role.Role)
+		if !roleSeen[role.Name] {
+			roleSeen[role.Name] = true
+			roles = append(roles, role.Name)
 		}
 		for _, authority := range role.Authorities {
-			if !permissionSeen[authority] {
-				permissionSeen[authority] = true
-				permissions = append(permissions, authority)
+			if !permissionSeen[authority.Name] {
+				permissionSeen[authority.Name] = true
+				permissions = append(permissions, authority.Name)
 			}
 		}
 	}

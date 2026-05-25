@@ -4,7 +4,9 @@ import "time"
 
 type Role struct {
 	ID          int64
-	Role        string
+	Name        string
 	CreatedAt   time.Time
-	Authorities []string
+	UpdatedAt   *time.Time
+	DeletedAt   *time.Time
+	Authorities []Authority
 }
