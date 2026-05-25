@@ -12,6 +12,10 @@ type Config struct {
 	JWTSecret   string
 	AuthMode    string
 	SessionTTL  time.Duration
+	RedisAddr   string
+	RedisPass   string
+	RedisDB     int
+	RedisPrefix string
 
 	AdminUsername string
 	AdminPassword string
@@ -23,12 +27,21 @@ func Load() Config {
 		ttlHours = 24
 	}
 
+	redisDB, err := strconv.Atoi(env("REDIS_DB", "0"))
+	if err != nil || redisDB < 0 {
+		redisDB = 0
+	}
+
 	return Config{
 		// Port:          env("PORT", "8081"),
 		// DatabaseURL:   env("DATABASE_URL", "postgres://rascal@localhost:5555/auth_service?sslmode=disable"),
 		// JWTSecret:     env("JWT_SECRET", "change-me"),
 		// AuthMode:      env("AUTH_MODE", "stateful"),
 		// SessionTTL:    time.Duration(ttlHours) * time.Hour,
+		// RedisAddr:     env("REDIS_ADDR", "localhost:6379"),
+		// RedisPass:     env("REDIS_PASSWORD", ""),
+		// RedisDB:       redisDB,
+		// RedisPrefix:   env("REDIS_SESSION_KEY_PREFIX", "session:"),
 		// AdminUsername: env("ADMIN_USERNAME", "rascal"),
 		// AdminPassword: env("ADMIN_PASSWORD", "atmin123"),
 		Port:          "8081",
@@ -36,6 +49,10 @@ func Load() Config {
 		JWTSecret:     "change-me",
 		AuthMode:      "stateful",
 		SessionTTL:    time.Duration(ttlHours) * time.Hour,
+		RedisAddr:     env("REDIS_ADDR", "localhost:6379"),
+		RedisPass:     env("REDIS_PASSWORD", ""),
+		RedisDB:       redisDB,
+		RedisPrefix:   env("REDIS_SESSION_KEY_PREFIX", "session:"),
 		AdminUsername: "rascal",
 		AdminPassword: "atmin123",
 	}

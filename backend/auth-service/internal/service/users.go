@@ -35,33 +35,28 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 		Password: req.Password,
 		RoleIDs:  []int64{userRole.ID},
 	})
-
-	// TODO 1:
-	// - Make event to Redis
-	// - Separate from UserService.Create
 }
 
 func (s *UserService) Create(ctx context.Context, req request.UserRequest) (response.UserResponse, error) {
 	if len(req.Username) < 5 || len(req.Password) < 8 || len(req.RoleIDs) == 0 {
 		return response.UserResponse{}, ErrValidation
 	}
+
 	if _, err := s.roleRepo.FindByIDs(ctx, req.RoleIDs); err != nil {
 		return response.UserResponse{}, err
 	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return response.UserResponse{}, err
 	}
+
 	user, err := s.userRepo.Create(ctx, req.Username, string(hash), req.RoleIDs)
 	if err != nil {
 		return response.UserResponse{}, err
 	}
-	return mapper.ToUserResponse(user), nil
 
-	// TODO 1:
-	// - Wrap hashing password to a function
-	// - Wrap validation to a function
-	// - Separate from UserService.Create
+	return mapper.ToUserResponse(user), nil
 }
 
 func (s *UserService) GetByID(ctx context.Context, id int64) (response.UserResponse, error) {

@@ -20,21 +20,24 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
-	db_pool, err := db.Connect(ctx, cfg.DatabaseURL)
-	if err != nil {
-		log.Fatalf("Connect database: %v", err)
-	}
+	db_pool, err := db.ConnectPostgres(ctx, cfg.DatabaseURL)
+	if err != nil { log.Fatalf("Connect database: %v", err) }
 	defer db_pool.Close()
 
-	// if err := db.Migrate(ctx, db_pool); err != nil {
-	// 	log.Fatalf("migrate database: %v", err)
-	// }
+	redisClient, err := db.ConnectRedis(ctx, cfg.RedisAddr, cfg.RedisPass, cfg.RedisDB)
+	if err != nil { log.Fatalf("Connect redis: %v", err) }
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Printf("close redis: %v", err)
+		}
+	}()
 
-	repos := repository.New(db_pool)
+	repos := repository.NewPostgres(db_pool)
+	sessionRepo := repository.NewSessionRepository(redisClient, cfg.RedisPrefix)
 	authSvc := service.NewAuthService(
 		cfg,
 		repos.Users,
-		// repos.Sessions,
+		sessionRepo,
 	)
 	userSvc := service.NewUserService(repos.Users, repos.Roles)
 	roleSvc := service.NewRoleService(repos.Roles)

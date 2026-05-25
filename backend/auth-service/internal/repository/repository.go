@@ -8,7 +8,7 @@ type Repositories struct {
 	Authorities *AuthorityRepository
 }
 
-func New(pool *pgxpool.Pool) Repositories {
+func NewPostgres(pool *pgxpool.Pool) Repositories {
 	return Repositories{
 		Users:       &UserRepository{pool: pool},
 		Roles:       &RoleRepository{pool: pool},

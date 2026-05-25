@@ -19,20 +19,20 @@ import (
 )
 
 type AuthService struct {
-	cfg   config.Config
-	users *repository.UserRepository
-	// sessions *repository.SessionRepository
+	cfg      config.Config
+	users    *repository.UserRepository
+	sessions *repository.SessionRepository
 }
 
 func NewAuthService(
 	cfg config.Config,
 	users *repository.UserRepository,
-	// sessions *repository.SessionRepository,
+	sessions *repository.SessionRepository,
 ) *AuthService {
 	return &AuthService{
-		cfg:   cfg,
-		users: users,
-		// sessions: sessions,
+		cfg:      cfg,
+		users:    users,
+		sessions: sessions,
 	}
 }
 
@@ -48,24 +48,35 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (resp
 	if err != nil {
 		return response.LoginResponse{}, err
 	}
+
 	if user.IsBanned {
 		return response.LoginResponse{}, ErrForbidden
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.HashPassword), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(user.HashPassword),
+		[]byte(req.Password),
+	); err != nil {
 		return response.LoginResponse{}, ErrUnauthorized
 	}
 
 	roles, permissions := collectGrants(user)
 	var tokenType, token string
 	if s.cfg.AuthMode == "stateful" {
-		tokenType = "Session"
+		tokenType = "Bearer"
 		token, err = randomToken()
 		if err != nil {
 			return response.LoginResponse{}, err
 		}
-		// if err := s.sessions.Create(ctx, token, user.ID, time.Now().Add(s.cfg.SessionTTL)); err != nil {
-		// 	return response.LoginResponse{}, err
-		// }
+
+		if err := s.sessions.Create(ctx, token, repository.Session{
+			Subject:     user.ID,
+			Username:    user.Username,
+			Roles:       roles,
+			Authorities: permissions,
+		}, s.cfg.SessionTTL); err != nil {
+			return response.LoginResponse{}, err
+		}
+
 	} else {
 		tokenType = "Bearer"
 		token, err = s.jwtToken(user.ID, roles, permissions)
@@ -92,10 +103,12 @@ func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (enti
 
 	var userID int64
 	var err error
-	if tokenType == "Bearer" {
+	if tokenType == "Bearer" && s.cfg.AuthMode != "stateful" {
 		userID, err = s.userIDFromJWT(token)
 	} else {
-		// userID, err = s.sessions.UserID(ctx, token)
+		var stored repository.Session
+		stored, err = s.sessions.Get(ctx, token)
+		userID = stored.Subject
 	}
 
 	if err != nil {
@@ -118,6 +131,7 @@ func (s *AuthService) jwtToken(userID int64, roles, permissions []string) (strin
 		"permissions": permissions,
 		"exp":         time.Now().Add(s.cfg.SessionTTL).Unix(),
 	}
+
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.cfg.JWTSecret))
 }
 
@@ -140,11 +154,13 @@ func collectGrants(user entity.User) ([]string, []string) {
 	permissionSeen := map[string]bool{}
 	roles := make([]string, 0)
 	permissions := make([]string, 0)
+
 	for _, role := range user.Roles {
 		if !roleSeen[role.Name] {
 			roleSeen[role.Name] = true
 			roles = append(roles, role.Name)
 		}
+
 		for _, authority := range role.Authorities {
 			if !permissionSeen[authority.Name] {
 				permissionSeen[authority.Name] = true
@@ -152,6 +168,7 @@ func collectGrants(user entity.User) ([]string, []string) {
 			}
 		}
 	}
+
 	return roles, permissions
 }
 
@@ -160,6 +177,7 @@ func randomToken() (string, error) {
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
+
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
