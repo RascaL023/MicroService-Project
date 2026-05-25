@@ -1,0 +1,31 @@
+_format_version: "3.0"
+_transform: true
+
+plugins:
+  - name: my-session-injector
+    route: auth-protected-route
+  - name: my-session-injector
+    route: user-protected-route
+
+services:
+  - name: auth-service
+    url: http://127.0.0.1:8082
+    routes:
+      - name: auth-public-route
+        paths:
+          - /api/auths/login
+          - /api/auths/register
+        strip_path: false
+
+      - name: auth-protected-route
+        paths:
+          - /api/auths
+        strip_path: false
+
+  - name: user-service
+    url: http://127.0.0.1:8082
+    routes:
+      - name: user-protected-route
+        paths:
+          - /api/users
+        strip_path: false
