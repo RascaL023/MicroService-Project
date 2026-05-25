@@ -38,7 +38,14 @@ func NewAuthService(
 
 func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (response.LoginResponse, error) {
 	if len(req.Username) == 0 || len(req.Password) == 0 {
-		return response.LoginResponse{}, ErrValidation
+		fields := make([]FieldError, 0, 2)
+		if len(req.Username) == 0 {
+			fields = append(fields, FieldError{Field: "username", Message: "Username is required"})
+		}
+		if len(req.Password) == 0 {
+			fields = append(fields, FieldError{Field: "password", Message: "Password is required"})
+		}
+		return response.LoginResponse{}, NewValidationError(fields...)
 	}
 
 	user, err := s.users.FindByUsername(ctx, req.Username)
@@ -46,32 +53,44 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (resp
 		return response.LoginResponse{}, ErrWrongCredentials
 	}
 
-	if err != nil { return response.LoginResponse{}, err }
+	if err != nil {
+		return response.LoginResponse{}, err
+	}
 
-	if user.IsBanned { return response.LoginResponse{}, ErrForbidden }
+	if user.IsBanned {
+		return response.LoginResponse{}, ErrForbidden
+	}
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.HashPassword),
 		[]byte(req.Password),
-	); err != nil { return response.LoginResponse{}, ErrWrongCredentials }
+	); err != nil {
+		return response.LoginResponse{}, ErrWrongCredentials
+	}
 
 	roles, permissions := collectGrants(user)
 	var tokenType, token string
 	if s.cfg.AuthMode == "stateful" {
 		tokenType = "Session"
 		token, err = generateRandomToken()
-		if err != nil { return response.LoginResponse{}, err }
+		if err != nil {
+			return response.LoginResponse{}, err
+		}
 
 		if err := s.sessions.Create(ctx, token, repository.Session{
 			Subject:     user.ID,
 			Username:    user.Username,
 			Roles:       roles,
 			Authorities: permissions,
-		}, s.cfg.SessionTTL); err != nil { return response.LoginResponse{}, err }
+		}, s.cfg.SessionTTL); err != nil {
+			return response.LoginResponse{}, err
+		}
 
 	} else {
 		tokenType = "Bearer"
 		token, err = s.jwtToken(user.ID, roles, permissions)
-		if err != nil { return response.LoginResponse{}, err }
+		if err != nil {
+			return response.LoginResponse{}, err
+		}
 	}
 
 	return response.LoginResponse{
@@ -86,9 +105,13 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (resp
 
 func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, error) {
 	_, token := splitAuth(authHeader)
-	if token == "" { return "", ErrUnauthorized }
+	if token == "" {
+		return "", ErrUnauthorized
+	}
 	if err := s.sessions.Delete(ctx, token); err != nil {
-		if errors.Is(err, repository.ErrNotFound) { return "", ErrUnauthorized }
+		if errors.Is(err, repository.ErrNotFound) {
+			return "", ErrUnauthorized
+		}
 		return "", err
 	}
 

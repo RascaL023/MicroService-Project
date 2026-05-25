@@ -39,7 +39,17 @@ func (s *UserService) Register(ctx context.Context, req request.RegisterRequest)
 
 func (s *UserService) Create(ctx context.Context, req request.UserRequest) (response.UserResponse, error) {
 	if len(req.Username) < 5 || len(req.Password) < 8 || len(req.RoleIDs) == 0 {
-		return response.UserResponse{}, ErrValidation
+		fields := make([]FieldError, 0, 3)
+		if len(req.Username) < 5 {
+			fields = append(fields, FieldError{Field: "username", Message: "Username must be at least 5 characters"})
+		}
+		if len(req.Password) < 8 {
+			fields = append(fields, FieldError{Field: "password", Message: "Password must be at least 8 characters"})
+		}
+		if len(req.RoleIDs) == 0 {
+			fields = append(fields, FieldError{Field: "roleIds", Message: "Role is required"})
+		}
+		return response.UserResponse{}, NewValidationError(fields...)
 	}
 
 	if _, err := s.roleRepo.FindByIDs(ctx, req.RoleIDs); err != nil {
@@ -69,7 +79,7 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (response.UserRespo
 }
 
 func (s *UserService) List(ctx context.Context, page, size int) ([]response.UserResponse, int, error) {
-	users, total, err := s.userRepo.List(ctx, size, page*size)
+	users, total, err := s.userRepo.List(ctx, size, (page-1)*size)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -25,7 +25,7 @@ func (s *RoleService) GetByID(ctx context.Context, id int64) (response.RoleRespo
 }
 
 func (s *RoleService) List(ctx context.Context, page, size int) ([]response.RoleResponse, int, error) {
-	roles, total, err := s.roles.List(ctx, size, page*size)
+	roles, total, err := s.roles.List(ctx, size, (page-1)*size)
 	if err != nil {
 		return nil, 0, err
 	}
