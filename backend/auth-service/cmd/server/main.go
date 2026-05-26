@@ -33,7 +33,7 @@ func main() {
 	}()
 
 	repos := repository.NewPostgres(db_pool)
-	sessionRepo := repository.NewSessionRepository(redisClient, cfg.RedisPrefix)
+	sessionRepo := repository.NewSessionRepository(redisClient, cfg.RedisPrefix, cfg.RedisBanPrefix)
 	authSvc := service.NewAuthService(
 		cfg,
 		repos.Users,

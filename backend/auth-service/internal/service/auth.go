@@ -12,6 +12,7 @@ import (
 	"auth-service/internal/dto/request"
 	"auth-service/internal/dto/response"
 	"auth-service/internal/entity"
+	"auth-service/internal/mapper"
 	"auth-service/internal/repository"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -105,24 +106,29 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (resp
 
 func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, error) {
 	_, token := splitAuth(authHeader)
-	if token == "" {
-		return "", ErrUnauthorized
-	}
+	if token == "" { return "", ErrUnauthorized }
 	if err := s.sessions.Delete(ctx, token); err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return "", ErrUnauthorized
-		}
+		if errors.Is(err, repository.ErrNotFound) { return "", ErrUnauthorized }
 		return "", err
 	}
 
 	return "Logout success", nil
 }
 
+func (s *AuthService) Ban(ctx context.Context, userID int64) (response.UserResponse, error) {
+	user, err := s.users.SetBanned(ctx, userID, true)
+
+	if err != nil { return response.UserResponse{}, err }
+	if err := s.sessions.Ban(ctx, userID); err != nil {
+		return response.UserResponse{}, err
+	}
+
+	return mapper.ToUserResponse(user), nil
+}
+
 func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (entity.User, []string, []string, error) {
 	tokenType, token := splitAuth(authHeader)
-	if token == "" {
-		return entity.User{}, nil, nil, ErrUnauthorized
-	}
+	if token == "" { return entity.User{}, nil, nil, ErrUnauthorized }
 
 	var userID int64
 	var err error
@@ -134,14 +140,11 @@ func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (enti
 		userID = stored.Subject
 	}
 
-	if err != nil {
-		return entity.User{}, nil, nil, ErrUnauthorized
-	}
+	if err != nil { return entity.User{}, nil, nil, ErrUnauthorized }
 
 	user, err := s.users.FindByID(ctx, userID)
-	if err != nil {
-		return entity.User{}, nil, nil, err
-	}
+	if err != nil { return entity.User{}, nil, nil, err }
+	if user.IsBanned { return entity.User{}, nil, nil, ErrForbidden }
 
 	roles, permissions := collectGrants(user)
 	return user, roles, permissions, nil

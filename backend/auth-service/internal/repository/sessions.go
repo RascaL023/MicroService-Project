@@ -12,9 +12,17 @@ import (
 
 const (
 	createSessionScript = `
-redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[3])
-redis.call("SADD", KEYS[2], ARGV[2])
-redis.call("PEXPIRE", KEYS[2], ARGV[3])
+local sessionKey = KEYS[1] 
+local userIdSessionsKey = KEYS[2]
+
+local sessionValue = ARGV[1]
+local sessionTTL = ARGV[3]
+local userIdSessionsValue = ARGV[2]
+
+redis.call("SET", sessionKey, sessionValue, "PX", sessionTTL)
+redis.call("SADD", userIdSessionsKey, userIdSessionsValue)
+redis.call("PEXPIRE", userIdSessionsKey, sessionTTL)
+
 return 1
 `
 	deleteSessionScript = `
@@ -33,6 +41,28 @@ end
 
 return 1
 `
+	banUsersSessionScript = `
+local bannedKey = KEYS[1]
+local userSessionsKey = KEYS[2]
+local userId = ARGV[1]
+local sessionKeyPrefix = ARGV[2]
+
+redis.call("SADD", bannedKey, userId)
+local sessions = redis.call("SMEMBERS", userSessionsKey)
+local sessionKeys = {}
+
+for _, sid in ipairs(sessions) do
+    table.insert(sessionKeys, sessionKeyPrefix .. sid)
+end
+
+if #sessionKeys > 0 then
+    redis.call("DEL", unpack(sessionKeys))
+end
+
+redis.call("DEL", userSessionsKey)
+
+return #sessions
+`
 )
 
 type Session struct {
@@ -46,22 +76,27 @@ type Session struct {
 }
 
 type SessionRepository struct {
-	client    *redis.Client
-	keyPrefix string
+	client       *redis.Client
+	keyPrefix    string
+	banKeyPrefix string
 }
 
-func NewSessionRepository(client *redis.Client, keyPrefix string) *SessionRepository {
+func NewSessionRepository(client *redis.Client, keyPrefix, banKeyPrefix string) *SessionRepository {
 	return &SessionRepository{
-		client:    client,
-		keyPrefix: keyPrefix,
+		client:       client,
+		keyPrefix:    keyPrefix,
+		banKeyPrefix: banKeyPrefix,
 	}
 }
 
 func (r *SessionRepository) Create(ctx context.Context, token string, session Session, ttl time.Duration) error {
 	now := time.Now().UTC()
 
-	if session.Subject == 0 { session.Subject = session.UserID }
-	if session.UserID == 0 { session.UserID = session.Subject }
+	if session.Subject == 0 {
+		if session.UserID == 0 { return ErrNotFound }
+		session.Subject = session.UserID
+	}
+
 	session.IssuedAt = now
 	session.ExpiresAt = now.Add(ttl)
 
@@ -111,9 +146,20 @@ func (r *SessionRepository) Delete(ctx context.Context, token string) error {
 	return nil
 }
 
-func (r *SessionRepository) key(token string) string {
-	return r.keyPrefix + token
+func (r *SessionRepository) Ban(ctx context.Context, userID int64) error {
+	err := r.client.Eval(
+		ctx,
+		banUsersSessionScript,
+		[]string{r.banKeyPrefix, r.userSessionsKey(userID)},
+		userID,
+		r.keyPrefix,
+	).Err()
+	if err != nil { return err }
+
+	return nil
 }
+
+func (r *SessionRepository) key(token string) string { return r.keyPrefix + token }
 
 func (r *SessionRepository) userSessionsKey(userID int64) string {
 	return "user:" + strconv.FormatInt(userID, 10) + ":sessions"

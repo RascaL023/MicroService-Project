@@ -49,10 +49,11 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.With(server.requireRole("ADMIN")).Get("/test", server.test)
 	})
 
-	router.Route("/api/users", func(r chi.Router) {
+	router.Route("/api/users-auth", func(r chi.Router) {
 		r.With(server.requireAuthority("user.create")).Post("/", server.createUser)
 		r.With(server.requireAuthority("user.readAll")).Get("/", server.listUsers)
 		r.With(server.requireAuthenticated).Get("/{id}", server.getUserByID)
+		r.With(server.requireRole("ADMIN")).Post("/{id}/ban", server.ban)
 	})
 
 	router.Route("/api/roles", func(r chi.Router) {
@@ -90,6 +91,14 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusCreated, "User registered successfully", registerResponse, err)
 }
 
+func (s *Server) ban(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok { return }
+
+	userResponse, err := s.authSvc.Ban(r.Context(), id)
+	respond(w, http.StatusOK, "User banned successfully", userResponse, err)
+}
+
 func (s *Server) test(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, "Test successful", nil)
 }
@@ -118,6 +127,7 @@ func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+
 	auth, _ := r.Context().Value(authContextKey).(authContext)
 	if auth.User.ID != id && !auth.Authorities["user.readAll"] {
 		writeError(w, http.StatusForbidden, "You do not have access to this resource", "FORBIDDEN")
@@ -150,11 +160,15 @@ func (s *Server) requireAuthenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, roles, authorities, err := s.authSvc.Authenticate(r.Context(), r.Header.Get("Authorization"))
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, "You are not authenticated", "UNAUTHORIZED")
+			if errors.Is(err, service.ErrForbidden) {
+				writeError(w, http.StatusForbidden, "You do not have access to this resource", "FORBIDDEN")
+			} else {
+				writeError(w, http.StatusUnauthorized, "You are not authenticated", "UNAUTHORIZED")
+			}
 			return
 		}
 		auth := authContext{
-			User:        response.UserResponse{ID: user.ID, Username: user.Username},
+			User:        response.UserResponse{ID: user.ID, Username: user.Username, IsBanned: user.IsBanned},
 			Roles:       set(roles),
 			Authorities: set(authorities),
 		}

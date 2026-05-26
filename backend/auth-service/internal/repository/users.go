@@ -57,7 +57,9 @@ func (r *UserRepository) Create(ctx context.Context, username, hashPassword stri
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil { return entity.User{}, err }
+	if err := tx.Commit(ctx); err != nil {
+		return entity.User{}, err
+	}
 	user.Roles, err = r.rolesForUser(ctx, user.ID)
 
 	return user, err
@@ -65,13 +67,27 @@ func (r *UserRepository) Create(ctx context.Context, username, hashPassword stri
 
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (entity.User, error) {
 	user, err := r.findOne(ctx, `WHERE u.id=$1 AND u.deleted_at IS NULL`, id)
-	if err != nil { return entity.User{}, err }
+	if err != nil {
+		return entity.User{}, err
+	}
 
 	return user, nil
 }
 
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (entity.User, error) {
 	user, err := r.findOne(ctx, `WHERE u.username=$1 AND u.deleted_at IS NULL`, username)
+	if err != nil { return entity.User{}, err }
+
+	return user, nil
+}
+
+func (r *UserRepository) SetBanned(ctx context.Context, id int64, banned bool) (entity.User, error) {
+	user, err := r.findOneReturning(ctx, `
+		UPDATE users
+		SET is_banned=$2, updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL
+		RETURNING id, username, hash_password, is_banned, created_at, updated_at, deleted_at
+	`, id, banned)
 	if err != nil { return entity.User{}, err }
 
 	return user, nil
@@ -90,7 +106,9 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 		ORDER BY id
 		LIMIT $1 OFFSET $2
 	`, limit, offset)
-	if err != nil { return nil, 0, err }
+	if err != nil {
+		return nil, 0, err
+	}
 	defer rows.Close()
 
 	users := make([]entity.User, 0)
@@ -104,9 +122,13 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 			&user.CreatedAt,
 			&user.UpdatedAt,
 			&user.DeletedAt,
-		); err != nil { return nil, 0, err }
+		); err != nil {
+			return nil, 0, err
+		}
 		user.Roles, err = r.rolesForUser(ctx, user.ID)
-		if err != nil { return nil, 0, err }
+		if err != nil {
+			return nil, 0, err
+		}
 		users = append(users, user)
 	}
 
@@ -114,11 +136,15 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 }
 
 func (r *UserRepository) findOne(ctx context.Context, where string, arg any) (entity.User, error) {
-	var user entity.User
-	err := r.pool.QueryRow(ctx, `
+	return r.findOneReturning(ctx, `
 		SELECT u.id, u.username, u.hash_password, u.is_banned, u.created_at, u.updated_at, u.deleted_at
 		FROM users u
-		`+where, arg).Scan(
+		`+where, arg)
+}
+
+func (r *UserRepository) findOneReturning(ctx context.Context, query string, args ...any) (entity.User, error) {
+	var user entity.User
+	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
 		&user.Username,
 		&user.HashPassword,
@@ -127,8 +153,12 @@ func (r *UserRepository) findOne(ctx context.Context, where string, arg any) (en
 		&user.UpdatedAt,
 		&user.DeletedAt,
 	)
-	if errors.Is(err, pgx.ErrNoRows) { return entity.User{}, ErrNotFound }
-	if err != nil { return entity.User{}, err }
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.User{}, ErrNotFound
+	}
+	if err != nil {
+		return entity.User{}, err
+	}
 	user.Roles, err = r.rolesForUser(ctx, user.ID)
 
 	return user, err
@@ -142,7 +172,9 @@ func (r *UserRepository) rolesForUser(ctx context.Context, userID int64) ([]enti
 		WHERE ur.user_id=$1 AND r.deleted_at IS NULL
 		ORDER BY r.id
 	`, userID)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 
 	roles := make([]entity.Role, 0)
@@ -152,7 +184,9 @@ func (r *UserRepository) rolesForUser(ctx context.Context, userID int64) ([]enti
 			return nil, err
 		}
 		role.Authorities, err = r.authoritiesForRole(ctx, role.ID)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		roles = append(roles, role)
 	}
 
@@ -167,7 +201,9 @@ func (r *UserRepository) authoritiesForRole(ctx context.Context, roleID int64) (
 		WHERE ar.role_id=$1 AND a.deleted_at IS NULL
 		ORDER BY a.name
 	`, roleID)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 
 	authorities := make([]entity.Authority, 0)
@@ -179,7 +215,9 @@ func (r *UserRepository) authoritiesForRole(ctx context.Context, roleID int64) (
 			&authority.CreatedAt,
 			&authority.UpdatedAt,
 			&authority.DeletedAt,
-		); err != nil { return nil, err }
+		); err != nil {
+			return nil, err
+		}
 		authorities = append(authorities, authority)
 	}
 
