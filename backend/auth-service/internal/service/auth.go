@@ -152,7 +152,7 @@ func (s *AuthService) jwtToken(userID int64, roles, permissions []string) (strin
 		"sub":         strconv.FormatInt(userID, 10),
 		"roles":       roles,
 		"permissions": permissions,
-		"exp":         time.Now().Add(s.cfg.SessionTTL).Unix(),
+		"exp":         time.Now().Add(s.cfg.JWTTTL).Unix(),
 	}
 
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.cfg.JWTSecret))

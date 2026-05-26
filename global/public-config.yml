@@ -1,0 +1,32 @@
+services:
+  auth:
+    port: 8081
+
+database:
+  provider: postgresql
+  host: localhost
+  port: 5555
+  username: rascal
+  password: ""
+  sslmode: disable
+  names:
+    auth_service: mcr_auth
+    user_service: mcr_user
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+  prefixes: 
+    session: "session:"
+    ban: "banned:users"
+
+default_pagination:
+  size: 10
+  max_size: 100
+
+auth:
+  mode: stateful
+  session_ttl_hours: 24
+  jwt_ttl_minutes: 5
