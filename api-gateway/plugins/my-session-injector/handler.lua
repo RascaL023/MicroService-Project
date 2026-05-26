@@ -7,9 +7,8 @@ local MySessionInjector = {
 }
 
 function MySessionInjector:access(conf)
-    if kong.request.get_method() == "OPTIONS" then
-      return
-    end
+    if kong.request.get_method() == "OPTIONS" then return end
+
     local auth_header = kong.request.get_header("authorization")
     -- local auth_header = kong.request.get_header("cookie")
     -- kong.log.warn("[====> Cookie]", auth_header)
@@ -22,7 +21,8 @@ function MySessionInjector:access(conf)
         )
     end
 
-    local token = auth_header:match("^[Bb]earer%s+(.+)$")
+    local token = auth_header:match("^[Ss]ession%s+(.+)$")
+    -- local token = auth_header:match("^[Bb]earer%s+(.+)$")
     -- local token = auth_header:match("^.+=(.+)$")
     if not token then
         return kong.response.exit(401, {
@@ -120,7 +120,7 @@ function MySessionInjector:access(conf)
 
     kong.service.request.set_header(
         conf.session_header_internal_signature,
-        "atlanta331"
+        "atlanta23"
     )
 
 
