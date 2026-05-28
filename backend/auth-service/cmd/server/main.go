@@ -21,11 +21,15 @@ func main() {
 	ctx := context.Background()
 
 	db_pool, err := db.ConnectPostgres(ctx, cfg.DatabaseURL)
-	if err != nil { log.Fatalf("Connect database: %v", err) }
+	if err != nil {
+		log.Fatalf("Connect database: %v", err)
+	}
 	defer db_pool.Close()
 
 	redisClient, err := db.ConnectRedis(ctx, cfg.RedisAddr, cfg.RedisPass, cfg.RedisDB)
-	if err != nil { log.Fatalf("Connect redis: %v", err) }
+	if err != nil {
+		log.Fatalf("Connect redis: %v", err)
+	}
 	defer func() {
 		if err := redisClient.Close(); err != nil {
 			log.Printf("close redis: %v", err)

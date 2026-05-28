@@ -3,5 +3,4 @@ admin:
   password: atmin123
 
 security:
-  secret_key: w9hf20HADJIOasd9283hads9g2yeh29d82uasdh9asdh9
   internal_signature: atlanta23

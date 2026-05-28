@@ -28,6 +28,4 @@ default_pagination:
   max_size: 100
 
 auth:
-  mode: stateful
   session_ttl_hours: 24
-  jwt_ttl_minutes: 5

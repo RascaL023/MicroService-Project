@@ -5,3 +5,8 @@ type UserRequest struct {
 	Password string  `json:"password"`
 	RoleIDs  []int64 `json:"roleIds"`
 }
+
+type UserBanRequest struct {
+	IsBanned       *bool `json:"isBanned"`
+	RevokeSessions *bool `json:"revokeSessions,omitempty"`
+}

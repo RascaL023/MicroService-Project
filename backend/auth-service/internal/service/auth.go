@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"strconv"
-	"time"
 
 	"auth-service/internal/config"
 	"auth-service/internal/dto/request"
@@ -15,7 +13,6 @@ import (
 	"auth-service/internal/mapper"
 	"auth-service/internal/repository"
 
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -50,37 +47,36 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (resp
 	}
 
 	user, err := s.users.FindByUsername(ctx, req.Username)
-	if errors.Is(err, repository.ErrNotFound) { 
+	if errors.Is(err, repository.ErrNotFound) {
 		return response.LoginResponse{}, ErrWrongCredentials
 	}
-	if err != nil { return response.LoginResponse{}, err }
-	if user.IsBanned { return response.LoginResponse{}, ErrForbidden }
+	if err != nil {
+		return response.LoginResponse{}, err
+	}
+	if user.IsBanned {
+		return response.LoginResponse{}, ErrForbidden
+	}
 
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.HashPassword),
 		[]byte(req.Password),
-	); err != nil { return response.LoginResponse{}, ErrWrongCredentials }
+	); err != nil {
+		return response.LoginResponse{}, ErrWrongCredentials
+	}
 
 	roles, permissions := collectGrants(user)
-	var tokenType, token string
-	if s.cfg.AuthMode == "stateful" {
-		tokenType = "Session"
-		token, err = generateRandomToken()
-		if err != nil { return response.LoginResponse{}, err }
+	token, err := generateRandomToken()
+	if err != nil {
+		return response.LoginResponse{}, err
+	}
 
-		if err := s.sessions.Create(ctx, token, repository.Session{
-			Subject:     user.ID,
-			Username:    user.Username,
-			Roles:       roles,
-			Authorities: permissions,
-		}, s.cfg.SessionTTL); err != nil {
-			return response.LoginResponse{}, err
-		}
-
-	} else {
-		tokenType = "Bearer"
-		token, err = s.jwtToken(user.ID, roles, permissions)
-		if err != nil { return response.LoginResponse{}, err }
+	if err := s.sessions.Create(ctx, token, entity.Session{
+		Subject:     user.ID,
+		Username:    user.Username,
+		Roles:       roles,
+		Authorities: permissions,
+	}, s.cfg.SessionTTL); err != nil {
+		return response.LoginResponse{}, err
 	}
 
 	return response.LoginResponse{
@@ -88,88 +84,79 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (resp
 		Username:    user.Username,
 		Roles:       roles,
 		Permissions: permissions,
-		TokenType:   tokenType,
+		TokenType:   "Session",
 		AccessToken: token,
 	}, nil
 }
 
 func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, error) {
 	_, token := splitAuth(authHeader)
-	if token == "" { return "", ErrUnauthorized }
+	if token == "" {
+		return "", ErrUnauthorized
+	}
 	if err := s.sessions.Delete(ctx, token); err != nil {
-		if errors.Is(err, repository.ErrNotFound) { return "", ErrUnauthorized }
+		if errors.Is(err, repository.ErrNotFound) {
+			return "", ErrUnauthorized
+		}
 		return "", err
 	}
 
 	return "Logout success", nil
 }
 
-func (s *AuthService) Ban(ctx context.Context, userID int64) (response.UserResponse, error) {
-	user, err := s.users.SetBanned(ctx, userID, true)
-	if err != nil { return response.UserResponse{}, err }
+func (s *AuthService) UpdateUserBan(ctx context.Context, userID int64, req request.UserBanRequest) (response.UserResponse, error) {
+	if req.IsBanned == nil {
+		return response.UserResponse{}, NewValidationError(FieldError{
+			Field:   "isBanned",
+			Message: "isBanned is required",
+		})
+	}
 
-	if err := s.sessions.Ban(ctx, userID); err != nil {
+	isBanned := *req.IsBanned
+	revokeSessions := isBanned
+	if req.RevokeSessions != nil {
+		revokeSessions = *req.RevokeSessions
+	}
+
+	user, err := s.users.SetBanned(ctx, userID, isBanned)
+	if err != nil {
 		return response.UserResponse{}, err
+	}
+
+	if isBanned {
+		if _, err := s.sessions.BanSubject(ctx, userID, revokeSessions); err != nil {
+			return response.UserResponse{}, err
+		}
+	} else {
+		if err := s.sessions.UnbanSubject(ctx, userID); err != nil {
+			return response.UserResponse{}, err
+		}
 	}
 
 	return mapper.ToUserResponse(user), nil
 }
 
-func (s *AuthService) Unban(ctx context.Context, userID int64) (response.UserResponse, error) {
-	user, err := s.users.SetBanned(ctx, userID, false)
-	if err != nil { return response.UserResponse{}, err }
-
-	if err := s.sessions.UnBan(ctx, userID); err != nil {
-		return response.UserResponse{}, err
-	}
-
-	return  mapper.ToUserResponse(user), nil
-}
-
 func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (entity.User, []string, []string, error) {
-	tokenType, token := splitAuth(authHeader)
-	if token == "" { return entity.User{}, nil, nil, ErrUnauthorized }
-
-	var userID int64
-	var err error
-	if tokenType == "Bearer" && s.cfg.AuthMode != "stateful" {
-		userID, err = s.userIDFromJWT(token)
-	} else {
-		var stored repository.Session
-		stored, err = s.sessions.Get(ctx, token)
-		userID = stored.Subject
+	_, token := splitAuth(authHeader)
+	if token == "" {
+		return entity.User{}, nil, nil, ErrUnauthorized
 	}
 
-	if err != nil { return entity.User{}, nil, nil, ErrUnauthorized }
+	stored, err := s.sessions.Get(ctx, token)
+	if err != nil {
+		return entity.User{}, nil, nil, ErrUnauthorized
+	}
 
-	user, err := s.users.FindByID(ctx, userID)
-	if err != nil { return entity.User{}, nil, nil, err }
-	if user.IsBanned { return entity.User{}, nil, nil, ErrForbidden }
+	user, err := s.users.FindByID(ctx, stored.Subject)
+	if err != nil {
+		return entity.User{}, nil, nil, err
+	}
+	if user.IsBanned {
+		return entity.User{}, nil, nil, ErrForbidden
+	}
 
 	roles, permissions := collectGrants(user)
 	return user, roles, permissions, nil
-}
-
-func (s *AuthService) jwtToken(userID int64, roles, permissions []string) (string, error) {
-	claims := jwt.MapClaims{
-		"sub":         strconv.FormatInt(userID, 10),
-		"roles":       roles,
-		"permissions": permissions,
-		"exp":         time.Now().Add(s.cfg.JWTTTL).Unix(),
-	}
-
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.cfg.JWTSecret))
-}
-
-func (s *AuthService) userIDFromJWT(tokenValue string) (int64, error) {
-	token, err := jwt.Parse(tokenValue, func(token *jwt.Token) (any, error) {
-		return []byte(s.cfg.JWTSecret), nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
-	if err != nil || !token.Valid { return 0, ErrUnauthorized }
-	subject, err := token.Claims.GetSubject()
-	if err != nil { return 0, err }
-
-	return strconv.ParseInt(subject, 10, 64)
 }
 
 func collectGrants(user entity.User) ([]string, []string) {
@@ -197,16 +184,17 @@ func collectGrants(user entity.User) ([]string, []string) {
 
 func generateRandomToken() (string, error) {
 	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil { return "", err }
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
 
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
 func splitAuth(header string) (string, string) {
-	for _, prefix := range []string{"Bearer ", "Session "} {
-		if len(header) > len(prefix) && header[:len(prefix)] == prefix {
-			return prefix[:len(prefix)-1], header[len(prefix):]
-		}
+	const prefix = "Session "
+	if len(header) > len(prefix) && header[:len(prefix)] == prefix {
+		return "Session", header[len(prefix):]
 	}
 
 	return "Session", header

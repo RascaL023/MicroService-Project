@@ -13,20 +13,17 @@ import (
 )
 
 type Config struct {
-	Port        	string
-	DatabaseURL 	string
-	JWTSecret   	string
-	AuthMode    	string
-	SessionTTL  	time.Duration
-	JWTTTL      	time.Duration
-	RedisAddr   	string
-	RedisPass   	string
-	RedisDB     	int
-	RedisPrefix 	string
-	RedisBanPrefix 	string
+	Port           string
+	DatabaseURL    string
+	SessionTTL     time.Duration
+	RedisAddr      string
+	RedisPass      string
+	RedisDB        int
+	RedisPrefix    string
+	RedisBanPrefix string
 
-	AdminUsername 	string
-	AdminPassword 	string
+	AdminUsername string
+	AdminPassword string
 }
 
 type globalConfig struct {
@@ -35,7 +32,6 @@ type globalConfig struct {
 	Redis    redisConfig    `mapstructure:"redis"`
 	Auth     authConfig     `mapstructure:"auth"`
 	Admin    adminConfig    `mapstructure:"admin"`
-	Security securityConfig `mapstructure:"security"`
 }
 
 type servicesConfig struct {
@@ -74,18 +70,12 @@ type redisPrefixesConfig struct {
 }
 
 type authConfig struct {
-	Mode            string `mapstructure:"mode"`
-	SessionTTLHours int    `mapstructure:"session_ttl_hours"`
-	JWTTTLMinutes   int    `mapstructure:"jwt_ttl_minutes"`
+	SessionTTLHours int `mapstructure:"session_ttl_hours"`
 }
 
 type adminConfig struct {
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
-}
-
-type securityConfig struct {
-	SecretKey string `mapstructure:"secret_key"`
 }
 
 func Load() Config {
@@ -95,25 +85,24 @@ func Load() Config {
 	}
 
 	return Config{
-		Port:          	strconv.Itoa(raw.Services.Auth.Port),
-		DatabaseURL:   	databaseURL(raw.Database),
-		JWTSecret:     	raw.Security.SecretKey,
-		AuthMode:      	raw.Auth.Mode,
-		SessionTTL:    	time.Duration(raw.Auth.SessionTTLHours) * time.Hour,
-		JWTTTL:        	time.Duration(raw.Auth.JWTTTLMinutes) * time.Minute,
-		RedisAddr:     	net.JoinHostPort(raw.Redis.Host, strconv.Itoa(raw.Redis.Port)),
-		RedisPass:     	raw.Redis.Password,
-		RedisDB:       	raw.Redis.DB,
-		RedisPrefix:   	raw.Redis.Prefixes.Session,
-		RedisBanPrefix:	raw.Redis.Prefixes.Banned,
-		AdminUsername: 	raw.Admin.Username,
-		AdminPassword: 	raw.Admin.Password,
+		Port:           strconv.Itoa(raw.Services.Auth.Port),
+		DatabaseURL:    databaseURL(raw.Database),
+		SessionTTL:     time.Duration(raw.Auth.SessionTTLHours) * time.Hour,
+		RedisAddr:      net.JoinHostPort(raw.Redis.Host, strconv.Itoa(raw.Redis.Port)),
+		RedisPass:      raw.Redis.Password,
+		RedisDB:        raw.Redis.DB,
+		RedisPrefix:    raw.Redis.Prefixes.Session,
+		RedisBanPrefix: raw.Redis.Prefixes.Banned,
+		AdminUsername:  raw.Admin.Username,
+		AdminPassword:  raw.Admin.Password,
 	}
 }
 
 func loadGlobalConfig(target any) error {
 	dir, err := globalConfigDir()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	v := viper.New()
 	v.SetConfigType("yaml")
@@ -137,7 +126,9 @@ func loadGlobalConfig(target any) error {
 
 func globalConfigDir() (string, error) {
 	wd, err := os.Getwd()
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	for dir := wd; ; dir = filepath.Dir(dir) {
 		candidate := filepath.Join(dir, "global")
@@ -147,7 +138,9 @@ func globalConfigDir() (string, error) {
 		}
 
 		parent := filepath.Dir(dir)
-		if parent == dir { break }
+		if parent == dir {
+			break
+		}
 	}
 
 	return "", fmt.Errorf("global config directory not found from %s", wd)
@@ -162,7 +155,9 @@ func databaseURL(cfg databaseConfig) string {
 
 	if cfg.Password != "" {
 		dsn.User = url.UserPassword(cfg.Username, cfg.Password)
-	} else { dsn.User = url.User(cfg.Username) }
+	} else {
+		dsn.User = url.User(cfg.Username)
+	}
 
 	query := dsn.Query()
 	query.Set("sslmode", cfg.SSLMode)
