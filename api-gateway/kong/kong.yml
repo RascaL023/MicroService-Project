@@ -1,9 +1,9 @@
 _format_version: "3.0"
 _transform: true
 
-plugins:
-  - name: my-session-injector
-    route: auth-protected-route
+# plugins:
+#   - name: my-session-injector
+#     route: auth-protected-route
 
 services:
   - name: auth-service
@@ -11,12 +11,13 @@ services:
     routes:
       - name: auth-public-route
         paths:
-          - /api/auths/login
-          - /api/auths/register
-          - /api/auths/logout
+          - /api/auths
+          # - /api/auths/login
+          # - /api/auths/register
+          # - /api/auths/logout
         strip_path: false
 
-      - name: auth-protected-route
-        paths:
-          - /api/auths
-        strip_path: false
+      # - name: auth-protected-route
+      #   paths:
+      #     - /api/auths
+      #   strip_path: false

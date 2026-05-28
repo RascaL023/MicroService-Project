@@ -63,6 +63,13 @@ redis.call("DEL", userSessionsKey)
 
 return #sessions
 `
+	unBanUserScript = `
+local bannedKey = KEYS[1]
+local userID = ARGV[1]
+
+redis.call("SREM", bannedKey, userID)
+return 1
+`
 )
 
 type Session struct {
@@ -153,6 +160,18 @@ func (r *SessionRepository) Ban(ctx context.Context, userID int64) error {
 		[]string{r.banKeyPrefix, r.userSessionsKey(userID)},
 		userID,
 		r.keyPrefix,
+	).Err()
+	if err != nil { return err }
+
+	return nil
+}
+
+func (r *SessionRepository) UnBan(ctx context.Context, userID int64) error {
+	err := r.client.Eval(
+		ctx,
+		unBanUserScript,
+		[]string{r.banKeyPrefix},
+		userID,
 	).Err()
 	if err != nil { return err }
 

@@ -8,7 +8,7 @@ import (
 )
 
 type envelope struct {
-	Success   bool         `json:"success"`
+	Success   bool         `json:"isSuccess"`
 	Message   string       `json:"message"`
 	Data      any          `json:"data,omitempty"`
 	Errors    any          `json:"errors,omitempty"`

@@ -42,6 +42,23 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.SetHeader("Content-Type", "application/json"))
 
+	router.Get("/api/auths/test", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, "Service is healthy", map[string]string{"status": "ok"})
+	})
+
+	router.Route("/api/auths/users", func(r chi.Router) {
+		r.With(server.requireAuthority("user.create")).Post("/", server.createUser)
+		r.With(server.requireAuthority("user.readAll")).Get("/", server.listUsers)
+		r.With(server.requireAuthenticated).Get("/{id}", server.getUserByID)
+		r.With(server.requireRole("ADMIN")).Post("/{id}/ban", server.ban)
+		r.With(server.requireRole("ADMIN")).Post("/{id}/unban", server.unban)
+	})
+
+	router.Route("/api/auths/roles", func(r chi.Router) {
+		r.Get("/", server.listRoles)
+		r.Get("/{id}", server.getRoleByID)
+	})
+
 	router.Route("/api/auths", func(r chi.Router) {
 		r.Post("/login", server.login)
 		r.Post("/register", server.register)
@@ -49,29 +66,12 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.With(server.requireRole("ADMIN")).Get("/test", server.test)
 	})
 
-	router.Route("/api/users-auth", func(r chi.Router) {
-		r.With(server.requireAuthority("user.create")).Post("/", server.createUser)
-		r.With(server.requireAuthority("user.readAll")).Get("/", server.listUsers)
-		r.With(server.requireAuthenticated).Get("/{id}", server.getUserByID)
-		r.With(server.requireRole("ADMIN")).Post("/{id}/ban", server.ban)
-	})
-
-	router.Route("/api/roles", func(r chi.Router) {
-		r.Get("/", server.listRoles)
-		r.Get("/{id}", server.getRoleByID)
-	})
-
-	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, "Service is healthy", map[string]string{"status": "ok"})
-	})
 	return router
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var req request.LoginRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
 	loginResponse, err := s.authSvc.Login(r.Context(), req)
 
 	respond(w, http.StatusOK, "Login successful", loginResponse, err)
@@ -84,9 +84,8 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	var req request.RegisterRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
+
 	registerResponse, err := s.userSvc.Register(r.Context(), req)
 	respond(w, http.StatusCreated, "User registered successfully", registerResponse, err)
 }
@@ -99,15 +98,22 @@ func (s *Server) ban(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, "User banned successfully", userResponse, err)
 }
 
+func (s *Server) unban(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok { return }
+
+	userResponse, err := s.authSvc.Unban(r.Context(), id)
+	respond(w, http.StatusOK, "User unbanned successfully", userResponse, err)
+}
+
 func (s *Server) test(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, "Test successful", nil)
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	var req request.UserRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
+
 	userResponse, err := s.userSvc.Create(r.Context(), req)
 	respond(w, http.StatusCreated, "User created successfully", userResponse, err)
 }
@@ -124,9 +130,7 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
+	if !ok { return }
 
 	auth, _ := r.Context().Value(authContextKey).(authContext)
 	if auth.User.ID != id && !auth.Authorities["user.readAll"] {
@@ -149,9 +153,8 @@ func (s *Server) listRoles(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getRoleByID(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
+	if !ok { return }
+
 	roleResponse, err := s.roleSvc.GetByID(r.Context(), id)
 	respond(w, http.StatusOK, "Role retrieved successfully", roleResponse, err)
 }
@@ -243,15 +246,10 @@ func respond(w http.ResponseWriter, status int, message string, data any, err er
 func pagination(r *http.Request) (int, int) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-	if size > 100 {
-		size = 100
-	}
+	if page <= 0 { page = 1 }
+	if size <= 0 { size = 10 }
+	if size > 100 { size = 100 }
+
 	return page, size
 }
 

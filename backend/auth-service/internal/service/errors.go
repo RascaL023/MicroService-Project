@@ -30,8 +30,7 @@ func NewValidationError(fields ...FieldError) ValidationError {
 
 func ValidationFields(err error) ([]FieldError, bool) {
 	var validationErr ValidationError
-	if errors.As(err, &validationErr) {
-		return validationErr.Fields, true
-	}
+	if errors.As(err, &validationErr) { return validationErr.Fields, true }
+
 	return nil, false
 }
