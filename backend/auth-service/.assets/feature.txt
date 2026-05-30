@@ -1,0 +1,43 @@
+- Login, Register, Logout
+Input: 
+username 
+password 
+
+Output:
+public user data
+access token
+
+Required: 
+> Validation
+> Delete session
+> Check is user banned when login   !!!
+
+
+- Ban
+Input:
+user id
+
+Output:
+result from redis
+
+Required:
+> checking banned user from redis, SISMEMBER user:ban {userId}
+> add banned user by id to redis set
+SADDD banned:users {userId}
+SMEMBERS user:{userId}:sessions = uuids...
+DEL session:{uuids...}
+DEL user:{userId}:session
+> Lua script for better perfomance
+
+
+- Create Session to Redis
+Input:
+uuid
+user id
+session data(user id, roles, authorities)
+
+Output:
+
+Flow:
+> SET session:{uuid} {session data}
+> SADD user:{user id}:session {uuid}

@@ -33,7 +33,11 @@ build/
 .vscode/
 
 ### Me ###
-**/.assets/**
+# **/.assets/**
+**/.private/**
 **/go.mod
 **/go.sum
 **/**.bak
+**.http
+frontend
+.npm-cache
