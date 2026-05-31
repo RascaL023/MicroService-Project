@@ -1,15 +1,20 @@
 CREATE DATABASE mcr_auth;
 
 CREATE TABLE IF NOT EXISTS users (
-	id BIGSERIAL PRIMARY KEY,
-	username TEXT NOT NULL UNIQUE,
-	hash_password TEXT NOT NULL,
-	is_banned BOOLEAN NOT NULL DEFAULT FALSE,
+	id BIGINT PRIMARY KEY,
+	email TEXT NOT NULL,
+	hash_password TEXT,
+	status TEXT NOT NULL DEFAULT 'PENDING_ACTIVATION',
+	email_verified_at TIMESTAMPTZ,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 	updated_at TIMESTAMPTZ,
-	deleted_at TIMESTAMPTZ
+	deleted_at TIMESTAMPTZ,
+	CONSTRAINT users_status_check CHECK (status IN ('PENDING_ACTIVATION', 'ACTIVE', 'BANNED'))
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_active_idx
+ON users (email)
+WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS roles (
 	id BIGSERIAL PRIMARY KEY,
@@ -19,7 +24,6 @@ CREATE TABLE IF NOT EXISTS roles (
 	deleted_at TIMESTAMPTZ
 );
 
-
 CREATE TABLE IF NOT EXISTS authorities (
 	id BIGSERIAL PRIMARY KEY,
 	name TEXT NOT NULL UNIQUE,
@@ -28,8 +32,6 @@ CREATE TABLE IF NOT EXISTS authorities (
 	deleted_at TIMESTAMPTZ
 );
 
-
-
 CREATE TABLE IF NOT EXISTS users_roles (
 	user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -37,28 +39,37 @@ CREATE TABLE IF NOT EXISTS users_roles (
 );
 
 CREATE TABLE IF NOT EXISTS authorities_roles (
-    authority_id BIGINT NOT NULL REFERENCES authorities(id) ON DELETE CASCADE,
+	authority_id BIGINT NOT NULL REFERENCES authorities(id) ON DELETE CASCADE,
 	role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
 	PRIMARY KEY (role_id, authority_id)
 );
 
-
-
 INSERT INTO authorities(name) VALUES
-    ('user.create'),
-    ('user.createAll'),
-    ('user.read'),
-    ('user.readAll'),
-    ('user.update'),
-    ('user.updateAll'),
-    ('user.delete'),
-    ('user.deleteAll');
+	('user.create'),
+	('user.createAll'),
+	('user.read'),
+	('user.readAll'),
+	('user.update'),
+	('user.updateAll'),
+	('user.delete'),
+	('user.deleteAll')
+ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO authorities_roles(role_id, authority_id) VALUES
-    (1, 2),
-    (1, 4),
-    (1, 6),
-    (1, 8),
-    (2, 3),
-    (2, 5),
-    (2, 7);
+INSERT INTO roles(name, created_at) VALUES
+	('ADMIN', now()),
+	('USER', now())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO authorities_roles(role_id, authority_id)
+SELECT r.id, a.id
+FROM roles r
+JOIN authorities a ON a.name IN ('user.createAll', 'user.readAll', 'user.updateAll', 'user.deleteAll')
+WHERE r.name = 'ADMIN'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO authorities_roles(role_id, authority_id)
+SELECT r.id, a.id
+FROM roles r
+JOIN authorities a ON a.name IN ('user.read', 'user.update', 'user.delete')
+WHERE r.name = 'USER'
+ON CONFLICT DO NOTHING;

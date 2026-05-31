@@ -1,11 +1,15 @@
 package request
 
 type LoginRequest struct {
-	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-type RegisterRequest struct {
-	Username string `json:"username"`
+type ActivationRequest struct {
+	Email string `json:"email"`
+}
+
+type ActivationCompleteRequest struct {
+	Token    string `json:"token"`
 	Password string `json:"password"`
 }

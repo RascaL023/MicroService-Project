@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: notification-service
+
+  config:
+    import:
+      - optional:file:./global/public-config.yml
+      - optional:file:./global/private-config.yml
+      - optional:file:../../global/public-config.yml
+      - optional:file:../../global/private-config.yml
+
+  data:
+    redis:
+      host: ${redis.host:localhost}
+      port: ${redis.port:6379}
+      password: ${redis.password:}
+      database: ${redis.db:0}
+
+  mail:
+    host: ${notification.email.host:smtp.gmail.com}
+    port: ${notification.email.port:465}
+    username: ${notification.email.username:}
+    password: ${notification.email.password:}
+    properties:
+      mail:
+        debug: ${notification.email.debug:false}
+        smtp:
+          auth: ${notification.email.auth:true}
+          starttls:
+            enable: ${notification.email.starttls:false}
+            required: ${notification.email.starttls_required:false}
+          ssl:
+            enable: ${notification.email.ssl:true}
+          connectiontimeout: ${notification.email.connection_timeout_ms:10000}
+          timeout: ${notification.email.timeout_ms:10000}
+          writetimeout: ${notification.email.write_timeout_ms:10000}
+
+server:
+  port: ${services.notification.port:8083}
+
+notification:
+  streams:
+    emails: ${redis.streams.notification_emails:notification:emails}
+  app:
+    name: Divdik App

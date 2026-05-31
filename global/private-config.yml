@@ -1,6 +1,12 @@
 admin:
-  username: rascal
+  email: rascal@example.com
   password: atmin123
 
 security:
   internal_signature: atlanta23
+
+notification:
+  email:
+    username: "faiqemilzzz@gmail.com"
+    password: "zxyl hefl gacd ytzm "
+    from: "faiqemilzzz@gmail.com"

@@ -13,16 +13,20 @@ import (
 )
 
 type Config struct {
-	Port           string
-	DatabaseURL    string
-	SessionTTL     time.Duration
-	RedisAddr      string
-	RedisPass      string
-	RedisDB        int
-	RedisPrefix    string
-	RedisBanPrefix string
+	Port                    string
+	DatabaseURL             string
+	SessionTTL              time.Duration
+	ActivationTTL           time.Duration
+	ActivationURL           string
+	RedisAddr               string
+	RedisPass               string
+	RedisDB                 int
+	RedisPrefix             string
+	RedisBanPrefix          string
+	UserEventsStream        string
+	NotificationEmailStream string
 
-	AdminUsername string
+	AdminEmail    string
 	AdminPassword string
 }
 
@@ -62,6 +66,7 @@ type redisConfig struct {
 	Password string              `mapstructure:"password"`
 	DB       int                 `mapstructure:"db"`
 	Prefixes redisPrefixesConfig `mapstructure:"prefixes"`
+	Streams  redisStreamsConfig  `mapstructure:"streams"`
 }
 
 type redisPrefixesConfig struct {
@@ -69,11 +74,19 @@ type redisPrefixesConfig struct {
 	Banned  string `mapstructure:"ban"`
 }
 
+type redisStreamsConfig struct {
+	UserEvents        string `mapstructure:"user_events"`
+	NotificationEmail string `mapstructure:"notification_emails"`
+}
+
 type authConfig struct {
-	SessionTTLHours int `mapstructure:"session_ttl_hours"`
+	SessionTTLHours      int    `mapstructure:"session_ttl_hours"`
+	ActivationTTLMinutes int    `mapstructure:"activation_ttl_minutes"`
+	ActivationURL        string `mapstructure:"activation_url"`
 }
 
 type adminConfig struct {
+	Email    string `mapstructure:"email"`
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 }
@@ -84,17 +97,34 @@ func Load() Config {
 		panic(fmt.Sprintf("load config: %v", err))
 	}
 
+	sessionTTLHours := raw.Auth.SessionTTLHours
+	if sessionTTLHours == 0 {
+		sessionTTLHours = 24
+	}
+	activationTTLMinutes := raw.Auth.ActivationTTLMinutes
+	if activationTTLMinutes == 0 {
+		activationTTLMinutes = 30
+	}
+	adminEmail := raw.Admin.Email
+	if adminEmail == "" {
+		adminEmail = raw.Admin.Username
+	}
+
 	return Config{
-		Port:           strconv.Itoa(raw.Services.Auth.Port),
-		DatabaseURL:    databaseURL(raw.Database),
-		SessionTTL:     time.Duration(raw.Auth.SessionTTLHours) * time.Hour,
-		RedisAddr:      net.JoinHostPort(raw.Redis.Host, strconv.Itoa(raw.Redis.Port)),
-		RedisPass:      raw.Redis.Password,
-		RedisDB:        raw.Redis.DB,
-		RedisPrefix:    raw.Redis.Prefixes.Session,
-		RedisBanPrefix: raw.Redis.Prefixes.Banned,
-		AdminUsername:  raw.Admin.Username,
-		AdminPassword:  raw.Admin.Password,
+		Port:                    strconv.Itoa(raw.Services.Auth.Port),
+		DatabaseURL:             databaseURL(raw.Database),
+		SessionTTL:              time.Duration(sessionTTLHours) * time.Hour,
+		ActivationTTL:           time.Duration(activationTTLMinutes) * time.Minute,
+		ActivationURL:           defaultString(raw.Auth.ActivationURL, "http://localhost:5173/activate"),
+		RedisAddr:               net.JoinHostPort(raw.Redis.Host, strconv.Itoa(raw.Redis.Port)),
+		RedisPass:               raw.Redis.Password,
+		RedisDB:                 raw.Redis.DB,
+		RedisPrefix:             raw.Redis.Prefixes.Session,
+		RedisBanPrefix:          raw.Redis.Prefixes.Banned,
+		UserEventsStream:        defaultString(raw.Redis.Streams.UserEvents, "user:events"),
+		NotificationEmailStream: defaultString(raw.Redis.Streams.NotificationEmail, "notification:emails"),
+		AdminEmail:              adminEmail,
+		AdminPassword:           raw.Admin.Password,
 	}
 }
 
@@ -169,4 +199,11 @@ func databaseURL(cfg databaseConfig) string {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }

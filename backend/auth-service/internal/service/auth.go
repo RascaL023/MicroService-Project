@@ -3,8 +3,13 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"log"
+	"net/url"
+	"strings"
 
 	"auth-service/internal/config"
 	"auth-service/internal/dto/request"
@@ -17,76 +22,126 @@ import (
 )
 
 type AuthService struct {
-	cfg      config.Config
-	users    *repository.UserRepository
-	sessions *repository.SessionRepository
+	cfg         config.Config
+	users       *repository.UserRepository
+	sessions    *repository.SessionRepository
+	activations *repository.ActivationRepository
+	emailJobs   *repository.EmailJobPublisher
 }
 
 func NewAuthService(
 	cfg config.Config,
 	users *repository.UserRepository,
 	sessions *repository.SessionRepository,
+	activations *repository.ActivationRepository,
+	emailJobs *repository.EmailJobPublisher,
 ) *AuthService {
 	return &AuthService{
-		cfg:      cfg,
-		users:    users,
-		sessions: sessions,
+		cfg:         cfg,
+		users:       users,
+		sessions:    sessions,
+		activations: activations,
+		emailJobs:   emailJobs,
 	}
 }
 
 func (s *AuthService) Login(ctx context.Context, req request.LoginRequest) (response.LoginResponse, error) {
-	if len(req.Username) == 0 || len(req.Password) == 0 {
+	email := normalizeEmail(req.Email)
+	if email == "" || req.Password == "" {
 		fields := make([]FieldError, 0, 2)
-		if len(req.Username) == 0 {
-			fields = append(fields, FieldError{Field: "username", Message: "Username is required"})
+		if email == "" {
+			fields = append(fields, FieldError{Field: "email", Message: "Email is required"})
 		}
-		if len(req.Password) == 0 {
+		if req.Password == "" {
 			fields = append(fields, FieldError{Field: "password", Message: "Password is required"})
 		}
 		return response.LoginResponse{}, NewValidationError(fields...)
 	}
 
-	user, err := s.users.FindByUsername(ctx, req.Username)
+	user, err := s.users.FindByEmail(ctx, email)
 	if errors.Is(err, repository.ErrNotFound) {
 		return response.LoginResponse{}, ErrWrongCredentials
 	}
 	if err != nil {
 		return response.LoginResponse{}, err
 	}
-	if user.IsBanned {
+	if user.Status != repository.AccountActive || user.HashPassword == nil {
 		return response.LoginResponse{}, ErrForbidden
 	}
 
-	if err := bcrypt.CompareHashAndPassword(
-		[]byte(user.HashPassword),
-		[]byte(req.Password),
-	); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(*user.HashPassword), []byte(req.Password)); err != nil {
 		return response.LoginResponse{}, ErrWrongCredentials
 	}
 
-	roles, permissions := collectGrants(user)
+	return s.createSession(ctx, user)
+}
+
+func (s *AuthService) RequestActivation(ctx context.Context, req request.ActivationRequest) error {
+	email := normalizeEmail(req.Email)
+	if email == "" {
+		return NewValidationError(FieldError{Field: "email", Message: "Email is required"})
+	}
+
+	user, err := s.users.FindByEmail(ctx, email)
+	if errors.Is(err, repository.ErrNotFound) {
+		log.Printf("activation request ignored: auth identity not found for email=%s", email)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if user.Status != repository.AccountPendingActivation {
+		log.Printf("activation request ignored: userID=%d email=%s status=%s", user.ID, user.Email, user.Status)
+		return nil
+	}
+
 	token, err := generateRandomToken()
+	if err != nil {
+		return err
+	}
+	if err := s.activations.Create(ctx, tokenHash(token), user.ID, s.cfg.ActivationTTL); err != nil {
+		return err
+	}
+
+	if err := s.emailJobs.PublishActivation(ctx, user.Email, s.activationURL(token)); err != nil {
+		return err
+	}
+
+	log.Printf("activation requested: userID=%d email=%s", user.ID, user.Email)
+	return nil
+}
+
+func (s *AuthService) CompleteActivation(ctx context.Context, req request.ActivationCompleteRequest) (response.LoginResponse, error) {
+	if req.Token == "" || len(req.Password) < 8 {
+		fields := make([]FieldError, 0, 2)
+		if req.Token == "" {
+			fields = append(fields, FieldError{Field: "token", Message: "Token is required"})
+		}
+		if len(req.Password) < 8 {
+			fields = append(fields, FieldError{Field: "password", Message: "Password must be at least 8 characters"})
+		}
+		return response.LoginResponse{}, NewValidationError(fields...)
+	}
+
+	userID, err := s.activations.Consume(ctx, tokenHash(req.Token))
+	if errors.Is(err, repository.ErrNotFound) {
+		return response.LoginResponse{}, ErrUnauthorized
+	}
 	if err != nil {
 		return response.LoginResponse{}, err
 	}
 
-	if err := s.sessions.Create(ctx, token, entity.Session{
-		Subject:     user.ID,
-		Username:    user.Username,
-		Roles:       roles,
-		Authorities: permissions,
-	}, s.cfg.SessionTTL); err != nil {
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
 		return response.LoginResponse{}, err
 	}
 
-	return response.LoginResponse{
-		UserID:      user.ID,
-		Username:    user.Username,
-		Roles:       roles,
-		Permissions: permissions,
-		TokenType:   "Session",
-		AccessToken: token,
-	}, nil
+	user, err := s.users.SetActivatedPassword(ctx, userID, string(hash))
+	if err != nil {
+		return response.LoginResponse{}, err
+	}
+
+	return s.createSession(ctx, user)
 }
 
 func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, error) {
@@ -151,12 +206,49 @@ func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (enti
 	if err != nil {
 		return entity.User{}, nil, nil, err
 	}
-	if user.IsBanned {
+	if user.Status != repository.AccountActive {
 		return entity.User{}, nil, nil, ErrForbidden
 	}
 
 	roles, permissions := collectGrants(user)
 	return user, roles, permissions, nil
+}
+
+func (s *AuthService) createSession(ctx context.Context, user entity.User) (response.LoginResponse, error) {
+	roles, permissions := collectGrants(user)
+	sessionID, err := generateRandomToken()
+	if err != nil {
+		return response.LoginResponse{}, err
+	}
+
+	if err := s.sessions.Create(ctx, sessionID, entity.Session{
+		Subject:     user.ID,
+		Email:       user.Email,
+		Roles:       roles,
+		Authorities: permissions,
+	}, s.cfg.SessionTTL); err != nil {
+		return response.LoginResponse{}, err
+	}
+
+	return response.LoginResponse{
+		UserID:      user.ID,
+		Email:       user.Email,
+		Roles:       roles,
+		Permissions: permissions,
+		SessionID:   sessionID,
+	}, nil
+}
+
+func (s *AuthService) activationURL(token string) string {
+	parsed, err := url.Parse(s.cfg.ActivationURL)
+	if err != nil {
+		return s.cfg.ActivationURL + "?token=" + url.QueryEscape(token)
+	}
+
+	query := parsed.Query()
+	query.Set("token", token)
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 func collectGrants(user entity.User) ([]string, []string) {
@@ -189,6 +281,15 @@ func generateRandomToken() (string, error) {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func tokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }
 
 func splitAuth(header string) (string, string) {

@@ -12,6 +12,7 @@ import com.rascal.user_service.dto.mapper.UserMapper;
 import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
 import com.rascal.user_service.entity.User;
+import com.rascal.user_service.event.UserEventPublisher;
 import com.rascal.user_service.repository.UserRepository;
 
 import id.rascal.response_kit.exception.BadRequestException;
@@ -23,9 +24,11 @@ import id.rascal.response_kit.exception.NotFoundException;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserEventPublisher eventPublisher;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, UserEventPublisher eventPublisher) {
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
     }
 
 
@@ -62,7 +65,10 @@ public class UserService {
         user.setCreatedAt(LocalDateTime.now());
         user.setIsBanned(false);
 
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        eventPublisher.userCreated(saved, request.roleIds());
+
+        return saved;
     }
 
 
@@ -71,6 +77,8 @@ public class UserService {
             throw new BadRequestException("Invalid patch");
 
         User user = getById(id);
+        String oldEmail = user.getEmail();
+        Boolean oldBanned = user.getIsBanned();
 
         if (request.email() != null) {
             String email = normalizeEmail(request.email());
@@ -85,7 +93,18 @@ public class UserService {
         if (request.gender() != null) user.setGender(normalizeGender(request.gender()));
         user.setUpdatedAt(LocalDateTime.now());
 
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        if (request.email() != null && !oldEmail.equals(saved.getEmail())) {
+            eventPublisher.userEmailUpdated(saved, oldEmail);
+        }
+        if (request.isBanned() != null && !request.isBanned().equals(oldBanned)) {
+            eventPublisher.userBanUpdated(saved);
+        }
+        if (request.roleIds() != null) {
+            eventPublisher.userRolesUpdated(saved, request.roleIds());
+        }
+
+        return saved;
     }
 
 
@@ -93,7 +112,8 @@ public class UserService {
         User user = getById(id);
         user.setDeletedAt(LocalDateTime.now());
 
-        userRepository.save(user);
+        User saved = userRepository.save(user);
+        eventPublisher.userDeleted(saved);
     }
 
     private String normalizeName(String name) {

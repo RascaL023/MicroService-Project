@@ -59,8 +59,9 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 	})
 
 	router.Route("/api/auths", func(r chi.Router) {
+		r.Post("/activations/request", server.requestActivation)
+		r.Post("/activations/complete", server.completeActivation)
 		r.Post("/login", server.login)
-		r.Post("/register", server.register)
 		r.Post("/logout", server.logout)
 		r.With(server.requireRole("ADMIN")).Get("/test", server.test)
 	})
@@ -78,19 +79,29 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, "Login successful", loginResponse, err)
 }
 
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	_, err := s.authSvc.Logout(r.Context(), r.Header.Get("Authorization"))
-	respond(w, http.StatusOK, "Logout successful", nil, err)
-}
-
-func (s *Server) register(w http.ResponseWriter, r *http.Request) {
-	var req request.RegisterRequest
+func (s *Server) requestActivation(w http.ResponseWriter, r *http.Request) {
+	var req request.ActivationRequest
 	if !decode(w, r, &req) {
 		return
 	}
 
-	registerResponse, err := s.userSvc.Register(r.Context(), req)
-	respond(w, http.StatusCreated, "User registered successfully", registerResponse, err)
+	err := s.authSvc.RequestActivation(r.Context(), req)
+	respond(w, http.StatusOK, "If the email is valid, activation instructions have been sent", nil, err)
+}
+
+func (s *Server) completeActivation(w http.ResponseWriter, r *http.Request) {
+	var req request.ActivationCompleteRequest
+	if !decode(w, r, &req) {
+		return
+	}
+
+	loginResponse, err := s.authSvc.CompleteActivation(r.Context(), req)
+	respond(w, http.StatusOK, "Account activated successfully", loginResponse, err)
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	_, err := s.authSvc.Logout(r.Context(), r.Header.Get("Authorization"))
+	respond(w, http.StatusOK, "Logout successful", nil, err)
 }
 
 func (s *Server) updateUserBan(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +190,7 @@ func (s *Server) requireAuthenticated(next http.Handler) http.Handler {
 			return
 		}
 		auth := authContext{
-			User:        response.UserResponse{ID: user.ID, Username: user.Username, IsBanned: user.IsBanned},
+			User:        response.UserResponse{ID: user.ID, Email: user.Email, Status: user.Status, IsBanned: user.IsBanned},
 			Roles:       set(roles),
 			Authorities: set(authorities),
 		}
@@ -237,7 +248,7 @@ func respond(w http.ResponseWriter, status int, message string, data any, err er
 		}
 		writeValidationError(w, http.StatusBadRequest, "Validation failed", fields)
 	case errors.Is(err, service.ErrWrongCredentials):
-		writeError(w, http.StatusUnauthorized, "Username/password is incorrect", "WRONG_CREDENTIALS")
+		writeError(w, http.StatusUnauthorized, "Email/password is incorrect", "WRONG_CREDENTIALS")
 	case errors.Is(err, service.ErrUnauthorized):
 		writeError(w, http.StatusUnauthorized, "You are not authenticated", "UNAUTHORIZED")
 	case errors.Is(err, service.ErrForbidden):

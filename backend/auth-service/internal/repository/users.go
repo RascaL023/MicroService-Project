@@ -11,6 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const (
+	AccountPendingActivation = "PENDING_ACTIVATION"
+	AccountActive            = "ACTIVE"
+	AccountBanned            = "BANNED"
+)
+
 var ErrDuplicate = errors.New("duplicate record")
 var ErrNotFound = errors.New("record not found")
 
@@ -18,77 +24,198 @@ type UserRepository struct {
 	pool *pgxpool.Pool
 }
 
-func (r *UserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
+func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	var exists bool
-	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE username=$1 AND deleted_at IS NULL)`, username).Scan(&exists)
+	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email=$1 AND deleted_at IS NULL)`, email).Scan(&exists)
 	return exists, err
 }
 
-func (r *UserRepository) Create(ctx context.Context, username, hashPassword string, roleIDs []int64) (entity.User, error) {
+func (r *UserRepository) CreateBootstrapAdmin(ctx context.Context, id int64, email, hashPassword string, roleIDs []int64) (entity.User, error) {
 	tx, err := r.pool.Begin(ctx)
-	if err != nil { return entity.User{}, err }
+	if err != nil {
+		return entity.User{}, err
+	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var user entity.User
 	err = tx.QueryRow(ctx, `
-		INSERT INTO users (username, hash_password, created_at)
-		VALUES ($1, $2, now())
-		RETURNING id, username, hash_password, is_banned, created_at, updated_at, deleted_at
-	`, username, hashPassword).Scan(
+		INSERT INTO users (id, email, hash_password, status, email_verified_at, created_at)
+		VALUES ($1, $2, $3, $4, now(), now())
+		ON CONFLICT (id) DO UPDATE
+		SET email=$2, updated_at=now()
+		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+	`, id, email, hashPassword, AccountActive).Scan(
 		&user.ID,
-		&user.Username,
+		&user.Email,
 		&user.HashPassword,
-		&user.IsBanned,
+		&user.Status,
+		&user.EmailVerifiedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.DeletedAt,
 	)
 	if err != nil {
-		if pgErr := (*pgconn.PgError)(nil); errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if isDuplicate(err) {
 			return entity.User{}, ErrDuplicate
 		}
-
 		return entity.User{}, err
 	}
 
-	for _, roleID := range roleIDs {
-		if _, err := tx.Exec(ctx, `INSERT INTO users_roles (user_id, role_id) VALUES ($1, $2)`, user.ID, roleID); err != nil {
-			return entity.User{}, err
-		}
+	if err := replaceRoles(ctx, tx, id, roleIDs); err != nil {
+		return entity.User{}, err
 	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return entity.User{}, err
 	}
-	user.Roles, err = r.rolesForUser(ctx, user.ID)
 
+	user.Roles, err = r.rolesForUser(ctx, user.ID)
+	user.IsBanned = user.Status == AccountBanned
 	return user, err
 }
 
-func (r *UserRepository) FindByID(ctx context.Context, id int64) (entity.User, error) {
-	user, err := r.findOne(ctx, `WHERE u.id=$1 AND u.deleted_at IS NULL`, id)
+func (r *UserRepository) Provision(ctx context.Context, userID int64, email string, roleIDs []int64, banned bool) (entity.User, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return entity.User{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	status := AccountPendingActivation
+	if banned {
+		status = AccountBanned
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE users
+		SET deleted_at=now(), updated_at=now()
+		WHERE email=$1 AND id<>$2 AND deleted_at IS NULL
+	`, email, userID)
 	if err != nil {
 		return entity.User{}, err
 	}
 
+	var user entity.User
+	err = tx.QueryRow(ctx, `
+		INSERT INTO users (id, email, status, created_at)
+		VALUES ($1, $2, $3, now())
+		ON CONFLICT (id) DO UPDATE
+		SET email=$2,
+			status=CASE
+				WHEN $3 = 'BANNED' THEN 'BANNED'
+				WHEN users.hash_password IS NULL THEN 'PENDING_ACTIVATION'
+				ELSE 'ACTIVE'
+			END,
+			updated_at=now(),
+			deleted_at=NULL
+		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+	`, userID, email, status).Scan(
+		&user.ID,
+		&user.Email,
+		&user.HashPassword,
+		&user.Status,
+		&user.EmailVerifiedAt,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.DeletedAt,
+	)
+	if err != nil {
+		if isDuplicate(err) {
+			return entity.User{}, ErrDuplicate
+		}
+		return entity.User{}, err
+	}
+
+	if err := replaceRoles(ctx, tx, userID, roleIDs); err != nil {
+		return entity.User{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.User{}, err
+	}
+
+	user.Roles, err = r.rolesForUser(ctx, user.ID)
+	user.IsBanned = user.Status == AccountBanned
+	return user, err
+}
+
+func (r *UserRepository) UpdateEmail(ctx context.Context, userID int64, email string) (entity.User, error) {
+	user, err := r.findOneReturning(ctx, `
+		UPDATE users
+		SET email=$2, updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL
+		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+	`, userID, email)
+	if err != nil {
+		if isDuplicate(err) {
+			return entity.User{}, ErrDuplicate
+		}
+		return entity.User{}, err
+	}
 	return user, nil
 }
 
-func (r *UserRepository) FindByUsername(ctx context.Context, username string) (entity.User, error) {
-	user, err := r.findOne(ctx, `WHERE u.username=$1 AND u.deleted_at IS NULL`, username)
-	if err != nil { return entity.User{}, err }
+func (r *UserRepository) SyncRoles(ctx context.Context, userID int64, roleIDs []int64) (entity.User, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return entity.User{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 
-	return user, nil
+	if err := replaceRoles(ctx, tx, userID, roleIDs); err != nil {
+		return entity.User{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return entity.User{}, err
+	}
+
+	return r.FindByID(ctx, userID)
+}
+
+func (r *UserRepository) MarkDeleted(ctx context.Context, id int64) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE users
+		SET deleted_at=now(), updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL
+	`, id)
+	return err
+}
+
+func (r *UserRepository) FindByID(ctx context.Context, id int64) (entity.User, error) {
+	return r.findOne(ctx, `WHERE u.id=$1 AND u.deleted_at IS NULL`, id)
+}
+
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (entity.User, error) {
+	return r.findOne(ctx, `WHERE u.email=$1 AND u.deleted_at IS NULL`, email)
+}
+
+func (r *UserRepository) SetActivatedPassword(ctx context.Context, id int64, hashPassword string) (entity.User, error) {
+	return r.findOneReturning(ctx, `
+		UPDATE users
+		SET hash_password=$2, status=$3, email_verified_at=COALESCE(email_verified_at, now()), updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL
+		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+	`, id, hashPassword, AccountActive)
 }
 
 func (r *UserRepository) SetBanned(ctx context.Context, id int64, banned bool) (entity.User, error) {
+	status := AccountActive
+	if banned {
+		status = AccountBanned
+	}
+
 	user, err := r.findOneReturning(ctx, `
 		UPDATE users
-		SET is_banned=$2, updated_at=now()
+		SET status=CASE
+				WHEN $2 = 'BANNED' THEN 'BANNED'
+				WHEN hash_password IS NULL THEN 'PENDING_ACTIVATION'
+				ELSE 'ACTIVE'
+			END,
+			updated_at=now()
 		WHERE id=$1 AND deleted_at IS NULL
-		RETURNING id, username, hash_password, is_banned, created_at, updated_at, deleted_at
-	`, id, banned)
-	if err != nil { return entity.User{}, err }
+		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+	`, id, status)
+	if err != nil {
+		return entity.User{}, err
+	}
 
 	return user, nil
 }
@@ -100,7 +227,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 	}
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, username, hash_password, is_banned, created_at, updated_at, deleted_at
+		SELECT id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
 		FROM users
 		WHERE deleted_at IS NULL
 		ORDER BY id
@@ -116,9 +243,10 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 		var user entity.User
 		if err := rows.Scan(
 			&user.ID,
-			&user.Username,
+			&user.Email,
 			&user.HashPassword,
-			&user.IsBanned,
+			&user.Status,
+			&user.EmailVerifiedAt,
 			&user.CreatedAt,
 			&user.UpdatedAt,
 			&user.DeletedAt,
@@ -129,6 +257,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 		if err != nil {
 			return nil, 0, err
 		}
+		user.IsBanned = user.Status == AccountBanned
 		users = append(users, user)
 	}
 
@@ -137,7 +266,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 
 func (r *UserRepository) findOne(ctx context.Context, where string, arg any) (entity.User, error) {
 	return r.findOneReturning(ctx, `
-		SELECT u.id, u.username, u.hash_password, u.is_banned, u.created_at, u.updated_at, u.deleted_at
+		SELECT u.id, u.email, u.hash_password, u.status, u.email_verified_at, u.created_at, u.updated_at, u.deleted_at
 		FROM users u
 		`+where, arg)
 }
@@ -146,9 +275,10 @@ func (r *UserRepository) findOneReturning(ctx context.Context, query string, arg
 	var user entity.User
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
-		&user.Username,
+		&user.Email,
 		&user.HashPassword,
-		&user.IsBanned,
+		&user.Status,
+		&user.EmailVerifiedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.DeletedAt,
@@ -160,6 +290,7 @@ func (r *UserRepository) findOneReturning(ctx context.Context, query string, arg
 		return entity.User{}, err
 	}
 	user.Roles, err = r.rolesForUser(ctx, user.ID)
+	user.IsBanned = user.Status == AccountBanned
 
 	return user, err
 }
@@ -222,4 +353,25 @@ func (r *UserRepository) authoritiesForRole(ctx context.Context, roleID int64) (
 	}
 
 	return authorities, rows.Err()
+}
+
+type roleTx interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+func replaceRoles(ctx context.Context, tx roleTx, userID int64, roleIDs []int64) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM users_roles WHERE user_id=$1`, userID); err != nil {
+		return err
+	}
+	for _, roleID := range roleIDs {
+		if _, err := tx.Exec(ctx, `INSERT INTO users_roles (user_id, role_id) VALUES ($1, $2)`, userID, roleID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isDuplicate(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
