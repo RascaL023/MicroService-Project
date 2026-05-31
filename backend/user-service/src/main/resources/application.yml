@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: user-service
+
+  config:
+    import:
+      # From repository root, for example: mvn -f backend/user-service/pom.xml spring-boot:run
+      - optional:file:./global/public-config.yml
+      - optional:file:./global/private-config.yml
+      # From service directory, for example: cd backend/user-service && mvn spring-boot:run
+      - optional:file:../../global/public-config.yml
+      - optional:file:../../global/private-config.yml
+
+  datasource:
+    url: jdbc:postgresql://${database.host:localhost}:${database.port:5432}/${database.names.user_service:mcr_user}?sslmode=${database.sslmode:disable}
+    username: ${database.username:postgres}
+    password: ${database.password:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show:
+      sql: true
+    format:
+      sql: true
+
+  web: 
+    pageable: 
+      default-page-size: 10
+      max-page-size: 100
+
+server:
+  address: ${services.user.host:localhost}
+  port: ${services.user.port:8082}

@@ -2,6 +2,9 @@ services:
   auth:
     host: localhost
     port: 8081
+  user:
+    host: localhost
+    port: 8082
 
 database:
   provider: postgresql
