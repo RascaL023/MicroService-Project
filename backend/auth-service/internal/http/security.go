@@ -20,7 +20,7 @@ func (s *Server) requireAuthenticated(next http.Handler) http.Handler {
 			return
 		}
 		auth := authContext{
-			User:        response.UserResponse{ID: user.ID, Email: user.Email, Status: user.Status, IsBanned: user.IsBanned},
+			User:        response.UserResponse{ID: user.ID, Email: user.Email, Status: user.Status},
 			Roles:       set(roles),
 			Authorities: set(authorities),
 		}
@@ -43,7 +43,7 @@ func (s *Server) requireAuthority(authority string) func(http.Handler) http.Hand
 	}
 }
 
-func (s *Server) requireAnyAuthority(authorities ...string) func(http.Handler) http.Handler  {
+func (s *Server) requireAnyAuthority(authorities ...string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return s.requireAuthenticated(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Context().Value(authContextKey).(authContext)
@@ -51,7 +51,7 @@ func (s *Server) requireAnyAuthority(authorities ...string) func(http.Handler) h
 			for _, authority := range authorities {
 				if auth.Authorities[authority] {
 					h.ServeHTTP(w, r)
-					return 
+					return
 				}
 			}
 

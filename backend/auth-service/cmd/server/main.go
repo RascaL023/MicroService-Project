@@ -50,8 +50,12 @@ func main() {
 	if err := service.SeedAdmin(ctx, cfg, repos.Users, repos.Roles);
 		err != nil { log.Fatalf("seed admin: %v", err) }
 
-	userEventConsumer := service.NewUserEventConsumer(redisClient, cfg.UserEventsStream, "auth-service", "auth-service-1", repos.Users)
-	go userEventConsumer.Run(ctx)
+	userEventConsumer := service.NewUserEventConsumer(
+		redisClient, 
+		cfg.UserEventsStream, 
+		"auth-service", "auth-service-1", 
+		repos.Users, sessionRepo,
+	); go userEventConsumer.Run(ctx)
 
 	router := apphttp.NewRouter(cfg, authSvc, userSvc, roleSvc)
 	server := &http.Server{
@@ -74,5 +78,7 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil { log.Printf("shutdown: %v", err) }
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown: %v", err)
+	}
 }

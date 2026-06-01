@@ -6,5 +6,5 @@ public record UserResponse(
     String email,
     Integer batch,
     String gender,
-    boolean isBanned
+    String status
 ) { }

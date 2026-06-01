@@ -21,9 +21,10 @@ type UserEventConsumer struct {
 	consumer      string
 	checkpointKey string
 	users         *repository.UserRepository
+	sessions      *repository.SessionRepository
 }
 
-func NewUserEventConsumer(client *redis.Client, stream, group, consumer string, users *repository.UserRepository) *UserEventConsumer {
+func NewUserEventConsumer(client *redis.Client, stream, group, consumer string, users *repository.UserRepository, sessions *repository.SessionRepository) *UserEventConsumer {
 	return &UserEventConsumer{
 		client:        client,
 		stream:        stream,
@@ -31,6 +32,7 @@ func NewUserEventConsumer(client *redis.Client, stream, group, consumer string, 
 		consumer:      consumer,
 		checkpointKey: "auth-service:" + stream + ":checkpoint",
 		users:         users,
+		sessions:      sessions,
 	}
 }
 
@@ -139,39 +141,78 @@ func (c *UserEventConsumer) saveCheckpoint(ctx context.Context, messageID string
 func (c *UserEventConsumer) handle(ctx context.Context, values map[string]any) error {
 	eventType := value(values, "type")
 	userID, err := strconv.ParseInt(value(values, "userId"), 10, 64)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	email := normalizeEmail(value(values, "email"))
 
 	switch eventType {
 	case "UserCreated":
 		roleIDs, err := parseRoleIDs(value(values, "roleIds"))
-		if err != nil {
+		if err != nil { return err }
+
+		status := eventStatus(values)
+		if _, err = c.users.Provision(ctx, userID, email, roleIDs, status);
+			err != nil { return err }
+
+		if status == repository.AccountBanned {
+			_, err := c.sessions.BanSubject(ctx, userID, true)
 			return err
 		}
-		banned, _ := strconv.ParseBool(value(values, "isBanned"))
-		_, err = c.users.Provision(ctx, userID, email, roleIDs, banned)
-		return err
+		return nil
 	case "UserEmailUpdated":
 		_, err = c.users.UpdateEmail(ctx, userID, email)
 		return err
+	case "UserStatusUpdated":
+		return c.setStatus(ctx, userID, eventStatus(values))
 	case "UserBanUpdated":
-		banned, _ := strconv.ParseBool(value(values, "isBanned"))
-		_, err = c.users.SetBanned(ctx, userID, banned)
-		return err
+		status := repository.AccountActive
+		if banned, _ := strconv.ParseBool(value(values, "isBanned")); banned {
+			status = repository.AccountBanned
+		}
+		return c.setStatus(ctx, userID, status)
 	case "UserRolesUpdated":
 		roleIDs, err := parseRoleIDs(value(values, "roleIds"))
 		if err != nil {
 			return err
 		}
-		_, err = c.users.SyncRoles(ctx, userID, roleIDs)
+		if _, err = c.users.SyncRoles(ctx, userID, roleIDs); err != nil {
+			return err
+		}
+		_, err = c.sessions.RevokeSubject(ctx, userID)
 		return err
 	case "UserDeleted":
 		return c.users.MarkDeleted(ctx, userID)
 	default:
 		return nil
 	}
+}
+
+func (c *UserEventConsumer) setStatus(ctx context.Context, userID int64, status string) error {
+	if status == repository.AccountBanned {
+		if _, err := c.sessions.BanSubject(ctx, userID, true); err != nil {
+			return err
+		}
+		if _, err := c.users.SetStatus(ctx, userID, status); err != nil {
+			_ = c.sessions.UnbanSubject(ctx, userID)
+			return err
+		}
+		return nil
+	}
+
+	if _, err := c.users.SetStatus(ctx, userID, status); err != nil {
+		return err
+	}
+	if err := c.sessions.UnbanSubject(ctx, userID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func eventStatus(values map[string]any) string {
+	status := strings.ToUpper(value(values, "status"))
+	if status == repository.AccountBanned {
+		return repository.AccountBanned
+	}
+	return repository.AccountActive
 }
 
 func value(values map[string]any, key string) string {

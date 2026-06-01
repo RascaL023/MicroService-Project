@@ -33,7 +33,7 @@ public class UserEventPublisher {
     public void userCreated(User user, List<Long> roleIds) {
         publish("UserCreated", user, Map.of(
             "roleIds", join(roleIds),
-            "isBanned", String.valueOf(Boolean.TRUE.equals(user.getIsBanned()))
+            "status", user.getStatus()
         ));
     }
 
@@ -43,9 +43,9 @@ public class UserEventPublisher {
         ));
     }
 
-    public void userBanUpdated(User user) {
-        publish("UserBanUpdated", user, Map.of(
-            "isBanned", String.valueOf(Boolean.TRUE.equals(user.getIsBanned()))
+    public void userStatusUpdated(User user) {
+        publish("UserStatusUpdated", user, Map.of(
+            "status", user.getStatus()
         ));
     }
 

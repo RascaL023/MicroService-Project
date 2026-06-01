@@ -31,8 +31,8 @@ public class User {
     @Column(name = "gender", nullable = false)
     private Character gender;
 
-    @Column(name = "is_banned")
-    private Boolean isBanned;
+    @Column(name = "status", nullable = false)
+    private String status;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

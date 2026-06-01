@@ -18,6 +18,24 @@ redis.call("PEXPIRE", subjectSessionsKey, sessionTTL)
 
 return 1
 `
+	getActiveSessionScript = `
+local session = redis.call("GET", KEYS[1])
+if not session then
+	return {0}
+end
+
+local data = cjson.decode(session)
+local subject = data.subject or data.userId
+if not subject then
+	return {0}
+end
+
+if redis.call("SISMEMBER", KEYS[2], tostring(subject)) == 1 then
+	return {2}
+end
+
+return {1, session}
+`
 	deleteSessionScript = `
 local session = redis.call("GET", KEYS[1])
 if not session then

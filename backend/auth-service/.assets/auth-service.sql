@@ -71,10 +71,21 @@ JOIN authorities a ON a.name IN ('user.read', 'user.update', 'user.delete')
 WHERE r.name = 'USER'
 ON CONFLICT DO NOTHING;
 
+INSERT INTO users(id, email, hash_password, created_at, status) VALUES 
+    (1, 'asep2345', '$2a$10$wP/Zqv4FMKxYj6MzmnKg5eaQ8C/Pjrubrh5tojRbB8M6H5WiwGZMa', NOW(), 'ACTIVE');
+
+INSERT INTO users_roles(user_id, role_id)
+SELECT u.id, r.id
+FROM roles r
+JOIN users u ON r.name IN ('USER')
+WHERE u.id = 1
+ON CONFLICT DO NOTHING;
 
 
 SELECT 
-    r.name AS Role, a.name AS Authority
+    r.name AS role,
+    string_agg(a.name, ', ' ORDER BY a.name) AS authority
 FROM authorities_roles ar
     JOIN roles r ON r.id = ar.role_id
-    JOIN authorities a ON a.id = ar.authority_id;
+    JOIN authorities a ON a.id = ar.authority_id
+GROUP BY r.name;

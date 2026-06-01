@@ -15,7 +15,7 @@ public class UserMapper {
             user.getBatch(),
             user.getGender() == 'L' ? 
                 "Laki - laki" : "Perempuan",
-            user.getIsBanned()
+            user.getStatus()
         );
 
         return response;
@@ -31,11 +31,10 @@ public class UserMapper {
         return user;
     }
 
-    public static User patch(User user, UserPatchRequest request) {
-        if (request.isBanned() != null) user.setIsBanned(request.isBanned());
-        if (request.batch() != null) user.setBatch(request.batch());
-
-        return user;
-    }
+    // public static User patch(User user, UserPatchRequest request) {
+    //     if (request.batch() != null) user.setBatch(request.batch());
+    //
+    //     return user;
+    // }
     
 }

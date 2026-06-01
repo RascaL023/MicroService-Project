@@ -49,7 +49,7 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.With(server.requireAnyAuthority("user.create", "user.*")).Post("/", server.createUser)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/", server.listUsers)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/{id}", server.getUserByID)
-		r.With(server.requireAuthority("user.*")).Patch("/{id}/ban", server.updateUserBan)
+		r.With(server.requireAuthority("user.*")).Patch("/{id}/status", server.updateUserStatus)
 	})
 
 	router.Route("/api/auths", func(r chi.Router) {
@@ -91,15 +91,15 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, "Logout successful", nil, err)
 }
 
-func (s *Server) updateUserBan(w http.ResponseWriter, r *http.Request) {
+func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok { return }
 
-	var req request.UserBanRequest
+	var req request.UserStatusRequest
 	if !decode(w, r, &req) { return }
 
-	userResponse, err := s.authSvc.UpdateUserBan(r.Context(), id, req)
-	respond(w, http.StatusOK, "User ban status updated successfully", userResponse, err)
+	userResponse, err := s.authSvc.UpdateUserStatus(r.Context(), id, req)
+	respond(w, http.StatusOK, "User status updated successfully", userResponse, err)
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
@@ -126,10 +126,11 @@ func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 	if !ok { return }
 
 	auth, _ := r.Context().Value(authContextKey).(authContext)
-	if auth.User.ID != id && !auth.Authorities["user.readAll"] {
-		writeError(w, http.StatusForbidden, "You do not have access to this resource", "FORBIDDEN")
+	if auth.User.ID != id && !auth.Authorities["user.*"] {
+		writeError(w, http.StatusForbidden, "You don't have access to this resource", "FORBIDDEN")
 		return
 	}
+
 	userResponse, err := s.userSvc.GetByID(r.Context(), id)
 	respond(w, http.StatusOK, "User retrieved successfully", userResponse, err)
 }

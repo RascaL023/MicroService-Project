@@ -23,6 +23,9 @@ import id.rascal.response_kit.exception.NotFoundException;
 @Transactional
 public class UserService {
 
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_BANNED = "BANNED";
+
     private final UserRepository userRepository;
     private final UserEventPublisher eventPublisher;
 
@@ -63,7 +66,7 @@ public class UserService {
         user.setEmail(email);
         user.setGender(normalizeGender(request.gender()));
         user.setCreatedAt(LocalDateTime.now());
-        user.setIsBanned(false);
+        user.setStatus(STATUS_ACTIVE);
 
         User saved = userRepository.save(user);
         eventPublisher.userCreated(saved, request.roleIds());
@@ -78,27 +81,27 @@ public class UserService {
 
         User user = getById(id);
         String oldEmail = user.getEmail();
-        Boolean oldBanned = user.getIsBanned();
+        String oldStatus = user.getStatus();
 
         if (request.email() != null) {
             String email = normalizeEmail(request.email());
             if (userRepository.existsByEmailAndIdNotAndDeletedAtIsNull(email, id))
                 throw new ConflictException("Email already exist");
+            user.setEmail(normalizeEmail(email));
         }
 
-        UserMapper.patch(user, request);
-
+        if (request.batch() != null) user.setBatch(request.batch());
         if (request.name() != null) user.setName(normalizeName(request.name()));
-        if (request.email() != null) user.setEmail(normalizeEmail(request.email()));
         if (request.gender() != null) user.setGender(normalizeGender(request.gender()));
+        if (request.status() != null) user.setStatus(normalizeStatus(request.status()));
         user.setUpdatedAt(LocalDateTime.now());
 
         User saved = userRepository.save(user);
         if (request.email() != null && !oldEmail.equals(saved.getEmail())) {
             eventPublisher.userEmailUpdated(saved, oldEmail);
         }
-        if (request.isBanned() != null && !request.isBanned().equals(oldBanned)) {
-            eventPublisher.userBanUpdated(saved);
+        if (request.status() != null && !saved.getStatus().equals(oldStatus)) {
+            eventPublisher.userStatusUpdated(saved);
         }
         if (request.roleIds() != null) {
             eventPublisher.userRolesUpdated(saved, request.roleIds());
@@ -136,6 +139,14 @@ public class UserService {
         char normalized = Character.toUpperCase(gender);
         if (normalized != 'L' && normalized != 'P')
             throw new BadRequestException("Gender must be L or P");
+
+        return normalized;
+    }
+
+    private String normalizeStatus(String status) {
+        String normalized = status.trim().toUpperCase(Locale.ROOT);
+        if (!normalized.equals(STATUS_ACTIVE) && !normalized.equals(STATUS_BANNED))
+            throw new BadRequestException("Status must be ACTIVE or BANNED");
 
         return normalized;
     }

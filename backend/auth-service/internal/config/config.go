@@ -87,7 +87,6 @@ type authConfig struct {
 
 type adminConfig struct {
 	Email    string `mapstructure:"email"`
-	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 }
 
@@ -97,33 +96,20 @@ func Load() Config {
 		panic(fmt.Sprintf("load config: %v", err))
 	}
 
-	sessionTTLHours := raw.Auth.SessionTTLHours
-	if sessionTTLHours == 0 {
-		sessionTTLHours = 24
-	}
-	activationTTLMinutes := raw.Auth.ActivationTTLMinutes
-	if activationTTLMinutes == 0 {
-		activationTTLMinutes = 30
-	}
-	adminEmail := raw.Admin.Email
-	if adminEmail == "" {
-		adminEmail = raw.Admin.Username
-	}
-
 	return Config{
 		Port:                    strconv.Itoa(raw.Services.Auth.Port),
 		DatabaseURL:             databaseURL(raw.Database),
-		SessionTTL:              time.Duration(sessionTTLHours) * time.Hour,
-		ActivationTTL:           time.Duration(activationTTLMinutes) * time.Minute,
-		ActivationURL:           defaultString(raw.Auth.ActivationURL, "http://localhost:5173/activate"),
+		SessionTTL:              time.Duration(raw.Auth.SessionTTLHours) * time.Hour,
+		ActivationTTL:           time.Duration(raw.Auth.ActivationTTLMinutes) * time.Minute,
+		ActivationURL:           raw.Auth.ActivationURL,
 		RedisAddr:               net.JoinHostPort(raw.Redis.Host, strconv.Itoa(raw.Redis.Port)),
 		RedisPass:               raw.Redis.Password,
 		RedisDB:                 raw.Redis.DB,
 		RedisPrefix:             raw.Redis.Prefixes.Session,
 		RedisBanPrefix:          raw.Redis.Prefixes.Banned,
-		UserEventsStream:        defaultString(raw.Redis.Streams.UserEvents, "user:events"),
-		NotificationEmailStream: defaultString(raw.Redis.Streams.NotificationEmail, "notification:emails"),
-		AdminEmail:              adminEmail,
+		UserEventsStream:        raw.Redis.Streams.UserEvents,
+		NotificationEmailStream: raw.Redis.Streams.NotificationEmail,
+		AdminEmail:              raw.Admin.Email,
 		AdminPassword:           raw.Admin.Password,
 	}
 }
@@ -199,11 +185,4 @@ func databaseURL(cfg databaseConfig) string {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
-}
-
-func defaultString(value, fallback string) string {
-	if value == "" {
-		return fallback
-	}
-	return value
 }

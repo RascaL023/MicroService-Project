@@ -22,13 +22,13 @@ public record UserPatchRequest(
 
     Character gender,
     List<Long> roleIds,
-    Boolean isBanned
+    String status
 ) { 
     public boolean isEmptyPatch() {
         return 
             this.name() == null && this.email() == null && 
             this.password() == null && this.roleIds() == null &&
-            this.isBanned() == null && this.batch() == null &&
+            this.status() == null && this.batch() == null &&
             this.gender() == null;
     }
 }

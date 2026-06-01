@@ -69,11 +69,10 @@ func (r *UserRepository) CreateBootstrapAdmin(ctx context.Context, id int64, ema
 	}
 
 	user.Roles, err = r.rolesForUser(ctx, user.ID)
-	user.IsBanned = user.Status == AccountBanned
 	return user, err
 }
 
-func (r *UserRepository) Provision(ctx context.Context, userID int64, email string, roleIDs []int64, banned bool) (entity.User, error) {
+func (r *UserRepository) Provision(ctx context.Context, userID int64, email string, roleIDs []int64, upstreamStatus string) (entity.User, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return entity.User{}, err
@@ -81,7 +80,7 @@ func (r *UserRepository) Provision(ctx context.Context, userID int64, email stri
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	status := AccountPendingActivation
-	if banned {
+	if upstreamStatus == AccountBanned {
 		status = AccountBanned
 	}
 
@@ -133,7 +132,6 @@ func (r *UserRepository) Provision(ctx context.Context, userID int64, email stri
 	}
 
 	user.Roles, err = r.rolesForUser(ctx, user.ID)
-	user.IsBanned = user.Status == AccountBanned
 	return user, err
 }
 
@@ -196,12 +194,7 @@ func (r *UserRepository) SetActivatedPassword(ctx context.Context, id int64, has
 	`, id, hashPassword, AccountActive)
 }
 
-func (r *UserRepository) SetBanned(ctx context.Context, id int64, banned bool) (entity.User, error) {
-	status := AccountActive
-	if banned {
-		status = AccountBanned
-	}
-
+func (r *UserRepository) SetStatus(ctx context.Context, id int64, status string) (entity.User, error) {
 	user, err := r.findOneReturning(ctx, `
 		UPDATE users
 		SET status=CASE
@@ -229,9 +222,9 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
 		FROM users
-		WHERE deleted_at IS NULL
-		ORDER BY id
-		LIMIT $1 OFFSET $2
+	WHERE deleted_at IS NULL
+	ORDER BY id
+	LIMIT $1 OFFSET $2
 	`, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -257,7 +250,6 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 		if err != nil {
 			return nil, 0, err
 		}
-		user.IsBanned = user.Status == AccountBanned
 		users = append(users, user)
 	}
 
@@ -290,7 +282,6 @@ func (r *UserRepository) findOneReturning(ctx context.Context, query string, arg
 		return entity.User{}, err
 	}
 	user.Roles, err = r.rolesForUser(ctx, user.ID)
-	user.IsBanned = user.Status == AccountBanned
 
 	return user, err
 }

@@ -49,8 +49,40 @@ class UserServiceTest {
         assertThat(created.getName()).isEqualTo("Dimas");
         assertThat(created.getEmail()).isEqualTo("dimas@example.com");
         assertThat(created.getGender()).isEqualTo('L');
-        assertThat(created.getIsBanned()).isFalse();
+        assertThat(created.getStatus()).isEqualTo("ACTIVE");
         assertThat(created.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void patchCanUpdateStatus() {
+        User created = createUser("Dimas", "dimas@example.com", 'L');
+
+        User patched = userService.patch(created.getId(), new UserPatchRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "banned"
+        ));
+
+        assertThat(patched.getStatus()).isEqualTo("BANNED");
+    }
+
+    @Test
+    void patchRejectsInvalidStatus() {
+        User created = createUser("Dimas", "dimas@example.com", 'L');
+
+        assertThatThrownBy(() -> userService.patch(created.getId(), new UserPatchRequest(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "LOCKED"
+        ))).isInstanceOf(BadRequestException.class);
     }
 
     @Test

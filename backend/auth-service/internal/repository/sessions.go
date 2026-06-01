@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -74,6 +75,51 @@ func (r *SessionRepository) Get(ctx context.Context, token string) (entity.Sessi
 	return session, nil
 }
 
+func (r *SessionRepository) GetActive(ctx context.Context, token string) (entity.Session, bool, error) {
+	result, err := r.client.Eval(
+		ctx,
+		getActiveSessionScript,
+		[]string{r.key(token), r.banKey},
+	).Slice()
+	if err != nil {
+		return entity.Session{}, false, err
+	}
+	if len(result) == 0 {
+		return entity.Session{}, false, ErrNotFound
+	}
+
+	code, err := redisInt(result[0])
+	if err != nil {
+		return entity.Session{}, false, err
+	}
+	switch code {
+	case 0:
+		return entity.Session{}, false, ErrNotFound
+	case 2:
+		return entity.Session{}, true, nil
+	case 1:
+		if len(result) < 2 {
+			return entity.Session{}, false, ErrNotFound
+		}
+		raw, ok := result[1].(string)
+		if !ok {
+			return entity.Session{}, false, fmt.Errorf("session payload has unexpected type %T", result[1])
+		}
+
+		var session entity.Session
+		if err := json.Unmarshal([]byte(raw), &session); err != nil {
+			return entity.Session{}, false, err
+		}
+		if session.Subject == 0 {
+			session.Subject = session.UserID
+		}
+
+		return session, false, nil
+	default:
+		return entity.Session{}, false, fmt.Errorf("unknown session state %d", code)
+	}
+}
+
 func (r *SessionRepository) Delete(ctx context.Context, token string) error {
 	deleted, err := r.client.Eval(
 		ctx,
@@ -106,4 +152,17 @@ func (r *SessionRepository) key(token string) string { return r.keyPrefix + toke
 
 func (r *SessionRepository) userSessionsKey(userID int64) string {
 	return userSessionsKeyPrefix + strconv.FormatInt(userID, 10) + userSessionsKeySuffix
+}
+
+func redisInt(value any) (int64, error) {
+	switch typed := value.(type) {
+	case int64:
+		return typed, nil
+	case int:
+		return int64(typed), nil
+	case string:
+		return strconv.ParseInt(typed, 10, 64)
+	default:
+		return 0, fmt.Errorf("redis integer has unexpected type %T", value)
+	}
 }

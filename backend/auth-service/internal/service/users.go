@@ -50,7 +50,7 @@ func (s *UserService) Create(ctx context.Context, req request.UserRequest) (resp
 		return response.UserResponse{}, err
 	}
 
-	user, err := s.userRepo.Provision(ctx, req.UserID, email, req.RoleIDs, false)
+	user, err := s.userRepo.Provision(ctx, req.UserID, email, req.RoleIDs, repository.AccountActive)
 	if err != nil {
 		return response.UserResponse{}, err
 	}

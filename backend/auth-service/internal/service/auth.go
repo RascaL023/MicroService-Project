@@ -96,9 +96,7 @@ func (s *AuthService) RequestActivation(ctx context.Context, req request.Activat
 	}
 
 	token, err := generateRandomToken()
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	if err := s.activations.Create(ctx, tokenHash(token), user.ID, s.cfg.ActivationTTL); err != nil {
 		return err
 	}
@@ -146,9 +144,7 @@ func (s *AuthService) CompleteActivation(ctx context.Context, req request.Activa
 
 func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, error) {
 	_, token := splitAuth(authHeader)
-	if token == "" {
-		return "", ErrUnauthorized
-	}
+	if token == "" { return "", ErrUnauthorized }
 	if err := s.sessions.Delete(ctx, token); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return "", ErrUnauthorized
@@ -159,30 +155,40 @@ func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, er
 	return "Logout success", nil
 }
 
-func (s *AuthService) UpdateUserBan(ctx context.Context, userID int64, req request.UserBanRequest) (response.UserResponse, error) {
-	if req.IsBanned == nil {
+func (s *AuthService) UpdateUserStatus(ctx context.Context, userID int64, req request.UserStatusRequest) (response.UserResponse, error) {
+	status := strings.ToUpper(strings.TrimSpace(req.Status))
+	if status == "" {
 		return response.UserResponse{}, NewValidationError(FieldError{
-			Field:   "isBanned",
-			Message: "isBanned is required",
+			Field:   "status",
+			Message: "Status is required",
+		})
+	}
+	if status != repository.AccountActive && status != repository.AccountBanned {
+		return response.UserResponse{}, NewValidationError(FieldError{
+			Field:   "status",
+			Message: "Status must be ACTIVE or BANNED",
 		})
 	}
 
-	isBanned := *req.IsBanned
-	revokeSessions := isBanned
-	if req.RevokeSessions != nil {
-		revokeSessions = *req.RevokeSessions
-	}
+	revokeSessions := status == repository.AccountBanned
+	if req.RevokeSessions != nil { revokeSessions = *req.RevokeSessions }
 
-	user, err := s.users.SetBanned(ctx, userID, isBanned)
-	if err != nil {
-		return response.UserResponse{}, err
-	}
-
-	if isBanned {
+	var user entity.User
+	var err error
+	if status == repository.AccountBanned {
 		if _, err := s.sessions.BanSubject(ctx, userID, revokeSessions); err != nil {
 			return response.UserResponse{}, err
 		}
+		user, err = s.users.SetStatus(ctx, userID, status)
+		if err != nil {
+			_ = s.sessions.UnbanSubject(ctx, userID)
+			return response.UserResponse{}, err
+		}
 	} else {
+		user, err = s.users.SetStatus(ctx, userID, status)
+		if err != nil {
+			return response.UserResponse{}, err
+		}
 		if err := s.sessions.UnbanSubject(ctx, userID); err != nil {
 			return response.UserResponse{}, err
 		}
@@ -197,21 +203,20 @@ func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (enti
 		return entity.User{}, nil, nil, ErrUnauthorized
 	}
 
-	stored, err := s.sessions.Get(ctx, token)
+	stored, isBanned, err := s.sessions.GetActive(ctx, token)
 	if err != nil {
 		return entity.User{}, nil, nil, ErrUnauthorized
 	}
-
-	user, err := s.users.FindByID(ctx, stored.Subject)
-	if err != nil {
-		return entity.User{}, nil, nil, err
-	}
-	if user.Status != repository.AccountActive {
+	if isBanned {
 		return entity.User{}, nil, nil, ErrForbidden
 	}
 
-	roles, permissions := collectGrants(user)
-	return user, roles, permissions, nil
+	user := entity.User{
+		ID:     stored.Subject,
+		Email:  stored.Email,
+		Status: repository.AccountActive,
+	}
+	return user, stored.Roles, stored.Authorities, nil
 }
 
 func (s *AuthService) createSession(ctx context.Context, user entity.User) (response.LoginResponse, error) {
