@@ -85,11 +85,9 @@ func (s *AuthService) RequestActivation(ctx context.Context, req request.Activat
 	user, err := s.users.FindByEmail(ctx, email)
 	if errors.Is(err, repository.ErrNotFound) {
 		log.Printf("activation request ignored: auth identity not found for email=%s", email)
-		return nil
-	}
-	if err != nil {
 		return err
 	}
+	if err != nil { return err }
 	if user.Status != repository.AccountPendingActivation {
 		log.Printf("activation request ignored: userID=%d email=%s status=%s", user.ID, user.Email, user.Status)
 		return nil

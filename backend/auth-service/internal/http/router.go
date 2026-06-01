@@ -49,7 +49,7 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.With(server.requireAnyAuthority("user.create", "user.*")).Post("/", server.createUser)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/", server.listUsers)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/{id}", server.getUserByID)
-		r.With(server.requireAuthority("user.*")).Patch("/{id}/status", server.updateUserStatus)
+		// r.With(server.requireAuthority("user.*")).Patch("/{id}/status", server.updateUserStatus)
 	})
 
 	router.Route("/api/auths", func(r chi.Router) {
@@ -89,17 +89,6 @@ func (s *Server) completeActivation(w http.ResponseWriter, r *http.Request) {
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	_, err := s.authSvc.Logout(r.Context(), r.Header.Get("Authorization"))
 	respond(w, http.StatusOK, "Logout successful", nil, err)
-}
-
-func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok { return }
-
-	var req request.UserStatusRequest
-	if !decode(w, r, &req) { return }
-
-	userResponse, err := s.authSvc.UpdateUserStatus(r.Context(), id, req)
-	respond(w, http.StatusOK, "User status updated successfully", userResponse, err)
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {

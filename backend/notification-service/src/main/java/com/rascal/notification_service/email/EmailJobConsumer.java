@@ -61,7 +61,7 @@ public class EmailJobConsumer {
         for (MapRecord<String, Object, Object> record : records) {
             try {
                 handle(record.getValue());
-                redisTemplate.opsForStream().acknowledge(stream, GROUP, record.getId());
+                ackAndDelete(record);
             } catch (Exception err) {
                 log.warn("Failed to handle email job {}", record.getId(), err);
             }
@@ -77,6 +77,11 @@ public class EmailJobConsumer {
             string(payload.get("to")),
             string(payload.get("activationUrl"))
         );
+    }
+
+    private void ackAndDelete(MapRecord<String, Object, Object> record) {
+        redisTemplate.opsForStream().acknowledge(stream, GROUP, record.getId());
+        redisTemplate.opsForStream().delete(stream, record.getId());
     }
 
     private void ensureGroup() {
