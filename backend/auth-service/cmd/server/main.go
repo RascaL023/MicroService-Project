@@ -22,25 +22,23 @@ func main() {
 	defer cancel()
 
 	db_pool, err := db.ConnectPostgres(ctx, cfg.DatabaseURL)
-	if err != nil {
-		log.Fatalf("Connect database: %v", err)
-	}
+	if err != nil { log.Fatalf("Connect database: %v", err) }
 	defer db_pool.Close()
 
 	redisClient, err := db.ConnectRedis(ctx, cfg.RedisAddr, cfg.RedisPass, cfg.RedisDB)
-	if err != nil {
-		log.Fatalf("Connect redis: %v", err)
-	}
+	if err != nil { log.Fatalf("Connect redis: %v", err) }
 	defer func() {
-		if err := redisClient.Close(); err != nil {
-			log.Printf("close redis: %v", err)
-		}
+		if err := redisClient.Close(); err != nil { log.Printf("close redis: %v", err) }
 	}()
 
 	repos := repository.NewPostgres(db_pool)
 	sessionRepo := repository.NewSessionRepository(redisClient, cfg.RedisPrefix, cfg.RedisBanPrefix)
 	activationRepo := repository.NewActivationRepository(redisClient)
+
 	emailJobPublisher := repository.NewEmailJobPublisher(redisClient, cfg.NotificationEmailStream)
+
+	userSvc := service.NewUserService(repos.Users, repos.Roles)
+	roleSvc := service.NewRoleService(repos.Roles)
 	authSvc := service.NewAuthService(
 		cfg,
 		repos.Users,
@@ -48,12 +46,9 @@ func main() {
 		activationRepo,
 		emailJobPublisher,
 	)
-	userSvc := service.NewUserService(repos.Users, repos.Roles)
-	roleSvc := service.NewRoleService(repos.Roles)
 
-	if err := service.SeedAdmin(ctx, cfg, repos.Users, repos.Roles); err != nil {
-		log.Fatalf("seed admin: %v", err)
-	}
+	if err := service.SeedAdmin(ctx, cfg, repos.Users, repos.Roles);
+		err != nil { log.Fatalf("seed admin: %v", err) }
 
 	userEventConsumer := service.NewUserEventConsumer(redisClient, cfg.UserEventsStream, "auth-service", "auth-service-1", repos.Users)
 	go userEventConsumer.Run(ctx)
@@ -79,7 +74,5 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("shutdown: %v", err)
-	}
+	if err := server.Shutdown(shutdownCtx); err != nil { log.Printf("shutdown: %v", err) }
 }

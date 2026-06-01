@@ -46,13 +46,10 @@ CREATE TABLE IF NOT EXISTS authorities_roles (
 
 INSERT INTO authorities(name) VALUES
 	('user.create'),
-	('user.createAll'),
 	('user.read'),
-	('user.readAll'),
 	('user.update'),
-	('user.updateAll'),
 	('user.delete'),
-	('user.deleteAll')
+	('user.*')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO roles(name, created_at) VALUES
@@ -63,7 +60,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
-JOIN authorities a ON a.name IN ('user.createAll', 'user.readAll', 'user.updateAll', 'user.deleteAll')
+JOIN authorities a ON a.name IN ('user.*')
 WHERE r.name = 'ADMIN'
 ON CONFLICT DO NOTHING;
 
@@ -73,3 +70,11 @@ FROM roles r
 JOIN authorities a ON a.name IN ('user.read', 'user.update', 'user.delete')
 WHERE r.name = 'USER'
 ON CONFLICT DO NOTHING;
+
+
+
+SELECT 
+    r.name AS Role, a.name AS Authority
+FROM authorities_roles ar
+    JOIN roles r ON r.id = ar.role_id
+    JOIN authorities a ON a.id = ar.authority_id;

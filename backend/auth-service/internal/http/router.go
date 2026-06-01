@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -42,20 +41,15 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.SetHeader("Content-Type", "application/json"))
 
-	router.Get("/api/auths/test", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/api/auths/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, "Service is healthy", map[string]string{"status": "ok"})
 	})
 
 	router.Route("/api/auths/users", func(r chi.Router) {
-		r.With(server.requireAuthority("user.create")).Post("/", server.createUser)
-		r.With(server.requireAuthority("user.readAll")).Get("/", server.listUsers)
-		r.With(server.requireAuthenticated).Get("/{id}", server.getUserByID)
-		r.With(server.requireRole("ADMIN")).Patch("/{id}/ban", server.updateUserBan)
-	})
-
-	router.Route("/api/auths/roles", func(r chi.Router) {
-		r.Get("/", server.listRoles)
-		r.Get("/{id}", server.getRoleByID)
+		r.With(server.requireAnyAuthority("user.create", "user.*")).Post("/", server.createUser)
+		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/", server.listUsers)
+		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/{id}", server.getUserByID)
+		r.With(server.requireAuthority("user.*")).Patch("/{id}/ban", server.updateUserBan)
 	})
 
 	router.Route("/api/auths", func(r chi.Router) {
@@ -63,7 +57,6 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.Post("/activations/complete", server.completeActivation)
 		r.Post("/login", server.login)
 		r.Post("/logout", server.logout)
-		r.With(server.requireRole("ADMIN")).Get("/test", server.test)
 	})
 
 	return router
@@ -71,9 +64,7 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var req request.LoginRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
 	loginResponse, err := s.authSvc.Login(r.Context(), req)
 
 	respond(w, http.StatusOK, "Login successful", loginResponse, err)
@@ -81,9 +72,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) requestActivation(w http.ResponseWriter, r *http.Request) {
 	var req request.ActivationRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
 
 	err := s.authSvc.RequestActivation(r.Context(), req)
 	respond(w, http.StatusOK, "If the email is valid, activation instructions have been sent", nil, err)
@@ -91,9 +80,7 @@ func (s *Server) requestActivation(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) completeActivation(w http.ResponseWriter, r *http.Request) {
 	var req request.ActivationCompleteRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
 
 	loginResponse, err := s.authSvc.CompleteActivation(r.Context(), req)
 	respond(w, http.StatusOK, "Account activated successfully", loginResponse, err)
@@ -106,28 +93,18 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateUserBan(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
+	if !ok { return }
 
 	var req request.UserBanRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
 
 	userResponse, err := s.authSvc.UpdateUserBan(r.Context(), id, req)
 	respond(w, http.StatusOK, "User ban status updated successfully", userResponse, err)
 }
 
-func (s *Server) test(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, "Test successful", nil)
-}
-
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	var req request.UserRequest
-	if !decode(w, r, &req) {
-		return
-	}
+	if !decode(w, r, &req) { return }
 
 	userResponse, err := s.userSvc.Create(r.Context(), req)
 	respond(w, http.StatusCreated, "User created successfully", userResponse, err)
@@ -140,14 +117,13 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 		respond(w, http.StatusOK, "Users retrieved successfully", nil, err)
 		return
 	}
+
 	writePage(w, http.StatusOK, "Users retrieved successfully", users, page, size, total)
 }
 
 func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
+	if !ok { return }
 
 	auth, _ := r.Context().Value(authContextKey).(authContext)
 	if auth.User.ID != id && !auth.Authorities["user.readAll"] {
@@ -158,72 +134,6 @@ func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, "User retrieved successfully", userResponse, err)
 }
 
-func (s *Server) listRoles(w http.ResponseWriter, r *http.Request) {
-	page, size := pagination(r)
-	roles, total, err := s.roleSvc.List(r.Context(), page, size)
-	if err != nil {
-		respond(w, http.StatusOK, "Roles retrieved successfully", nil, err)
-		return
-	}
-	writePage(w, http.StatusOK, "Roles retrieved successfully", roles, page, size, total)
-}
-
-func (s *Server) getRoleByID(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-
-	roleResponse, err := s.roleSvc.GetByID(r.Context(), id)
-	respond(w, http.StatusOK, "Role retrieved successfully", roleResponse, err)
-}
-
-func (s *Server) requireAuthenticated(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, roles, authorities, err := s.authSvc.Authenticate(r.Context(), r.Header.Get("Authorization"))
-		if err != nil {
-			if errors.Is(err, service.ErrForbidden) {
-				writeError(w, http.StatusForbidden, "You do not have access to this resource", "FORBIDDEN")
-			} else {
-				writeError(w, http.StatusUnauthorized, "You are not authenticated", "UNAUTHORIZED")
-			}
-			return
-		}
-		auth := authContext{
-			User:        response.UserResponse{ID: user.ID, Email: user.Email, Status: user.Status, IsBanned: user.IsBanned},
-			Roles:       set(roles),
-			Authorities: set(authorities),
-		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authContextKey, auth)))
-	})
-}
-
-func (s *Server) requireRole(role string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return s.requireAuthenticated(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			auth := r.Context().Value(authContextKey).(authContext)
-			if !auth.Roles[role] {
-				writeError(w, http.StatusForbidden, "You do not have access to this resource", "FORBIDDEN")
-				return
-			}
-			next.ServeHTTP(w, r)
-		}))
-	}
-}
-
-func (s *Server) requireAuthority(authority string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return s.requireAuthenticated(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			auth := r.Context().Value(authContextKey).(authContext)
-			if !auth.Roles["ADMIN"] && !auth.Authorities[authority] {
-				writeError(w, http.StatusForbidden, "You do not have access to this resource", "FORBIDDEN")
-				return
-			}
-			next.ServeHTTP(w, r)
-		}))
-	}
-}
-
 func decode(w http.ResponseWriter, r *http.Request, target any) bool {
 	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
@@ -232,6 +142,7 @@ func decode(w http.ResponseWriter, r *http.Request, target any) bool {
 		})
 		return false
 	}
+
 	return true
 }
 
@@ -252,7 +163,7 @@ func respond(w http.ResponseWriter, status int, message string, data any, err er
 	case errors.Is(err, service.ErrUnauthorized):
 		writeError(w, http.StatusUnauthorized, "You are not authenticated", "UNAUTHORIZED")
 	case errors.Is(err, service.ErrForbidden):
-		writeError(w, http.StatusForbidden, "You do not have access to this resource", "FORBIDDEN")
+		writeError(w, http.StatusForbidden, "You don't have access to this resource", "FORBIDDEN")
 	case errors.Is(err, repository.ErrNotFound):
 		writeError(w, http.StatusNotFound, "Data not found", "NOT_FOUND")
 	case errors.Is(err, repository.ErrDuplicate):
@@ -265,15 +176,9 @@ func respond(w http.ResponseWriter, status int, message string, data any, err er
 func pagination(r *http.Request) (int, int) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-	if size > 100 {
-		size = 100
-	}
+	if page <= 0 { page = 1 }
+	if size <= 0 { size = 10 }
+	if size > 100 { size = 100 }
 
 	return page, size
 }
@@ -286,13 +191,6 @@ func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		})
 		return 0, false
 	}
-	return id, true
-}
 
-func set(values []string) map[string]bool {
-	result := make(map[string]bool, len(values))
-	for _, value := range values {
-		result[value] = true
-	}
-	return result
+	return id, true
 }
