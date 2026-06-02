@@ -16,6 +16,10 @@ return {
                     type = "string",
                     default = "session:"
                 }},
+                { redis_ban_key = {
+                    type = "string",
+                    default = "banned:users"
+                }},
 
                 { session_header_user_id = {
                     type = "string",

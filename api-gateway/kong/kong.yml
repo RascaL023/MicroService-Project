@@ -12,9 +12,6 @@ services:
       - name: auth-public-route
         paths:
           - /api/auths
-          # - /api/auths/login
-          # - /api/auths/register
-          # - /api/auths/logout
         strip_path: false
         plugins:
           - name: cors
@@ -35,11 +32,6 @@ services:
               credentials: false
               max_age: 3600
               preflight_continue: false
-
-      # - name: auth-protected-route
-      #   paths:
-      #     - /api/auths
-      #   strip_path: false
 
   - name: user-service
     url: http://localhost:8082
@@ -66,3 +58,9 @@ services:
               credentials: false
               max_age: 3600
               preflight_continue: false
+          - name: my-session-injector
+            config:
+              redis_host: "127.0.0.1"
+              redis_port: 6379
+              redis_key_prefix: "session:"
+              redis_ban_key: "banned:users"

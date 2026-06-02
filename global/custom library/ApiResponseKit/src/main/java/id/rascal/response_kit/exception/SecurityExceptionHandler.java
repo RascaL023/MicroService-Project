@@ -2,6 +2,8 @@ package id.rascal.response_kit.exception;
 
 import java.io.IOException;
 
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -20,6 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import tools.jackson.databind.ObjectMapper;
 
 @RestControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class SecurityExceptionHandler implements 
     AuthenticationEntryPoint, AccessDeniedHandler {
 

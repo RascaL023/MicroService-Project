@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -35,6 +36,7 @@ public class UserController {
 
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('user.*', 'user.read')")
     public ResponseEntity<?> getAllPaged(
         @RequestParam(required = false) String name,
         Pageable pageable
@@ -49,6 +51,7 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('user.*', 'user.read')")
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return ApiResponse.success(
             HttpStatus.OK, 
@@ -56,16 +59,8 @@ public class UserController {
         );
     }
 
-    @GetMapping("/exists")
-    public ResponseEntity<?> existsBy(@RequestParam("email") String email) {
-        return ApiResponse.success(
-            HttpStatus.OK, 
-            userService.existByEmail(email)
-        );
-    }
-
-
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('user.*', 'user.create')")
     public ResponseEntity<?> create(
         @Valid @RequestBody UserRequest request
     ) {
@@ -76,18 +71,27 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<?> patchById(
-        @PathVariable Long id,
+    @PreAuthorize("""
+        hasAuthority('user.*') or (
+            #id == authentication.name and #request.status == null and 
+            #request.batch == null and #request.gender == null
+        )
+    """
+    ) public ResponseEntity<?> patchById(
+        @PathVariable String id,
         @Valid @RequestBody UserPatchRequest request
     ) {
         return ApiResponse.success(
             HttpStatus.OK, 
-            UserMapper.toResponse(userService.patch(id, request))
+            UserMapper.toResponse(
+                userService.patch(Long.parseLong(id), request)
+            )
         );
     }
 
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('user.*')")
     public ResponseEntity<?> deleteById(@PathVariable Long id) {
         userService.deleteById(id);
         return ResponseEntity.noContent().build();
