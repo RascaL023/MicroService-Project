@@ -158,6 +158,8 @@ func respond(w http.ResponseWriter, status int, message string, data any, err er
 		writeError(w, http.StatusNotFound, "Data not found", "NOT_FOUND")
 	case errors.Is(err, repository.ErrDuplicate):
 		writeError(w, http.StatusConflict, "Data already exists", "DUPLICATE_RECORD")
+	case errors.Is(err, service.ErrConflict):
+		writeError(w, http.StatusConflict, "Email already activated", "CONFLICT")
 	default:
 		writeError(w, http.StatusInternalServerError, "Internal server error", "INTERNAL_SERVER_ERROR")
 	}

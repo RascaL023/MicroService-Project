@@ -90,7 +90,7 @@ func (s *AuthService) RequestActivation(ctx context.Context, req request.Activat
 	if err != nil { return err }
 	if user.Status != repository.AccountPendingActivation {
 		log.Printf("activation request ignored: userID=%d email=%s status=%s", user.ID, user.Email, user.Status)
-		return nil
+		return ErrConflict
 	}
 
 	token, err := generateRandomToken()
@@ -121,7 +121,7 @@ func (s *AuthService) CompleteActivation(ctx context.Context, req request.Activa
 
 	userID, err := s.activations.Consume(ctx, tokenHash(req.Token))
 	if errors.Is(err, repository.ErrNotFound) {
-		return response.LoginResponse{}, ErrUnauthorized
+		return response.LoginResponse{}, repository.ErrNotFound
 	}
 	if err != nil {
 		return response.LoginResponse{}, err

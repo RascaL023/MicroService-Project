@@ -6,6 +6,7 @@ var ErrValidation = errors.New("validation error")
 var ErrUnauthorized = errors.New("unauthorized")
 var ErrForbidden = errors.New("forbidden")
 var ErrWrongCredentials = errors.New("wrong credentials")
+var ErrConflict = errors.New("conflict")
 
 type FieldError struct {
 	Field   string `json:"field"`
