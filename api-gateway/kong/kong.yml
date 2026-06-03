@@ -39,6 +39,7 @@ services:
       - name: user-public-route
         paths:
           - /api/users
+          - /api/batches
         strip_path: false
         plugins:
           - name: cors

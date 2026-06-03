@@ -42,3 +42,4 @@ build/
 frontend
 .npm-cache
 **/bin/**
+**/logs/

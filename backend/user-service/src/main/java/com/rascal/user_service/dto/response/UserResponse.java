@@ -4,7 +4,7 @@ public record UserResponse(
     Long id,
     String name,
     String email,
-    Integer batch,
+    String batch,
     String gender,
     String status
 ) { }

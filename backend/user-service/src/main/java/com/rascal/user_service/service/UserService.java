@@ -11,8 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.rascal.user_service.dto.mapper.UserMapper;
 import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
+import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.entity.User;
 import com.rascal.user_service.event.UserEventPublisher;
+import com.rascal.user_service.repository.BatchRepository;
 import com.rascal.user_service.repository.UserRepository;
 
 import id.rascal.response_kit.exception.BadRequestException;
@@ -27,20 +29,30 @@ public class UserService {
     private static final String STATUS_BANNED = "BANNED";
 
     private final UserRepository userRepository;
+    private final BatchRepository batchRepository;
     private final UserEventPublisher eventPublisher;
 
-    public UserService(UserRepository userRepository, UserEventPublisher eventPublisher) {
+    public UserService(
+        UserRepository userRepository,
+        BatchRepository batchRepository,
+        UserEventPublisher eventPublisher
+    ) {
         this.userRepository = userRepository;
+        this.batchRepository = batchRepository;
         this.eventPublisher = eventPublisher;
     }
 
 
     @Transactional(readOnly = true)
     public Page<User> getAllPaged(String name, Pageable pageable) {
-        if (name == null || name.isBlank())
-            return userRepository.findAllByDeletedAtIsNull(pageable);
+        return getAllPaged(name, null, pageable);
+    }
 
-        return userRepository.findByNameContainingIgnoreCaseAndDeletedAtIsNull(name.trim(), pageable);
+    @Transactional(readOnly = true)
+    public Page<User> getAllPaged(String name, Integer batchId, Pageable pageable) {
+        String normalizedName = name == null ? "" : normalizeSearchName(name);
+
+        return userRepository.searchActiveUsers(normalizedName, batchId, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -65,6 +77,7 @@ public class UserService {
         user.setName(normalizeName(request.name()));
         user.setEmail(email);
         user.setGender(normalizeGender(request.gender()));
+        user.setBatch(getActiveBatch(request.batch()));
         user.setCreatedAt(LocalDateTime.now());
         user.setStatus(STATUS_ACTIVE);
 
@@ -90,7 +103,7 @@ public class UserService {
             user.setEmail(normalizeEmail(email));
         }
 
-        if (request.batch() != null) user.setBatch(request.batch());
+        if (request.batch() != null) user.setBatch(getActiveBatch(request.batch()));
         if (request.name() != null) user.setName(normalizeName(request.name()));
         if (request.gender() != null) user.setGender(normalizeGender(request.gender()));
         if (request.status() != null) user.setStatus(normalizeStatus(request.status()));
@@ -119,12 +132,21 @@ public class UserService {
         eventPublisher.userDeleted(saved);
     }
 
+
+
     private String normalizeName(String name) {
         String normalized = name.trim();
         if (normalized.isBlank())
             throw new BadRequestException("Name must be filled");
 
         return normalized;
+    }
+
+    private String normalizeSearchName(String name) {
+        if (name == null || name.isBlank())
+            return null;
+
+        return name.trim();
     }
 
     private String normalizeEmail(String email) {
@@ -149,6 +171,11 @@ public class UserService {
             throw new BadRequestException("Status must be ACTIVE or BANNED");
 
         return normalized;
+    }
+
+    private Batch getActiveBatch(Integer batchId) {
+        return batchRepository.findByIdAndDeletedAtIsNull(batchId)
+            .orElseThrow(() -> new NotFoundException("Batch not found"));
     }
 
 }

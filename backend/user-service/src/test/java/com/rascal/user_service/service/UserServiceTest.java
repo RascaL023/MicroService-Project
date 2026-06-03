@@ -14,7 +14,9 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
+import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.entity.User;
+import com.rascal.user_service.repository.BatchRepository;
 import com.rascal.user_service.repository.UserRepository;
 
 import id.rascal.response_kit.exception.BadRequestException;
@@ -31,9 +33,15 @@ class UserServiceTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private BatchRepository batchRepository;
+
     @BeforeEach
     void setUp() {
         userRepository.deleteAll();
+        batchRepository.deleteAll();
+        seedBatch(23);
+        seedBatch(24);
     }
 
     @Test
@@ -49,8 +57,26 @@ class UserServiceTest {
         assertThat(created.getName()).isEqualTo("Dimas");
         assertThat(created.getEmail()).isEqualTo("dimas@example.com");
         assertThat(created.getGender()).isEqualTo('L');
+        assertThat(created.getBatch().getId()).isEqualTo(23);
         assertThat(created.getStatus()).isEqualTo("ACTIVE");
         assertThat(created.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void patchCanMoveUserToAnotherBatch() {
+        User created = createUser("Dimas", "dimas@example.com", 'L');
+
+        User patched = userService.patch(created.getId(), new UserPatchRequest(
+            null,
+            null,
+            null,
+            24,
+            null,
+            null,
+            null
+        ));
+
+        assertThat(patched.getBatch().getId()).isEqualTo(24);
     }
 
     @Test
@@ -122,6 +148,33 @@ class UserServiceTest {
     }
 
     @Test
+    void getAllPagedCanFilterByBatch() {
+        User batch23User = createUser("Dimas", "dimas@example.com", 'L', 23);
+        createUser("Budi", "budi@example.com", 'L', 24);
+
+        assertThat(userService.getAllPaged(null, 23, PageRequest.of(0, 10)).getContent())
+            .extracting(User::getId)
+            .containsExactly(batch23User.getId());
+    }
+
+    @Test
+    void getAllPagedCanSearchNameInsideBatch() {
+        User matched = createUser("Dimas Pratama", "dimas@example.com", 'L', 23);
+        createUser("Dimas Saputra", "dimas24@example.com", 'L', 24);
+        createUser("Budi Pratama", "budi@example.com", 'L', 23);
+
+        assertThat(userService.getAllPaged("dimas", 23, PageRequest.of(0, 10)).getContent())
+            .extracting(User::getId)
+            .containsExactly(matched.getId());
+    }
+
+    @Test
+    void getAllPagedReturnsEmptyPageForUnknownBatchFilter() {
+        assertThat(userService.getAllPaged(null, 99, PageRequest.of(0, 10)).getContent())
+            .isEmpty();
+    }
+
+    @Test
     void patchRejectsDuplicateEmailForAnotherUser() {
         User dimas = createUser("Dimas", "dimas@example.com", 'L');
         createUser("Budi", "budi@example.com", 'L');
@@ -148,12 +201,24 @@ class UserServiceTest {
     }
 
     private User createUser(String name, String email, Character gender) {
+        return createUser(name, email, gender, 23);
+    }
+
+    private User createUser(String name, String email, Character gender, Integer batch) {
         return userService.create(new UserRequest(
             name,
             email,
-            23,
+            batch,
             gender,
             List.of(1L)
         ));
+    }
+
+    private void seedBatch(Integer id) {
+        Batch batch = new Batch();
+        batch.setId(id);
+        batch.setName("Batch " + id);
+        batch.setCreatedAt(java.time.LocalDateTime.now());
+        batchRepository.save(batch);
     }
 }

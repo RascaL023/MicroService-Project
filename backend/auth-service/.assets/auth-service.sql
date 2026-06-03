@@ -45,11 +45,10 @@ CREATE TABLE IF NOT EXISTS authorities_roles (
 );
 
 INSERT INTO authorities(name) VALUES
-	('user.create'),
-	('user.read'),
-	('user.update'),
-	('user.delete'),
-	('user.*')
+	('user.create'), ('user.read'), ('user.update'), ('user.delete'),
+	('user.*'),
+	('batch.create'), ('batch.read'), ('batch.update'), ('batch.delete'),
+	('batch.*')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO roles(name, created_at) VALUES
@@ -60,15 +59,17 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
-JOIN authorities a ON a.name IN ('user.*')
+JOIN authorities a ON a.name IN ('user.*', 'batch.*')
 WHERE r.name = 'ADMIN'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
-JOIN authorities a ON a.name IN ('user.read', 'user.update', 'user.delete')
-WHERE r.name = 'USER'
+JOIN authorities a ON a.name IN (
+    'user.read', 'user.update',
+    'batch.read'
+) WHERE r.name = 'USER'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users(id, email, hash_password, created_at, status) VALUES 

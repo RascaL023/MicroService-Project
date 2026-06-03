@@ -39,9 +39,10 @@ public class UserController {
     @PreAuthorize("hasAnyAuthority('user.*', 'user.read')")
     public ResponseEntity<?> getAllPaged(
         @RequestParam(required = false) String name,
+        @RequestParam(required = false) Integer batch,
         Pageable pageable
     ) {
-        Page<UserResponse> users = userService.getAllPaged(name, pageable)
+        Page<UserResponse> users = userService.getAllPaged(name, batch, pageable)
             .map(UserMapper::toResponse);
         
         return ApiResponse.paged(
@@ -59,6 +60,7 @@ public class UserController {
         );
     }
 
+
     @PostMapping
     @PreAuthorize("hasAnyAuthority('user.*', 'user.create')")
     public ResponseEntity<?> create(
@@ -69,6 +71,7 @@ public class UserController {
             UserMapper.toResponse(userService.create(request))
         );
     }
+
 
     @PatchMapping("/{id}")
     @PreAuthorize("""
