@@ -43,3 +43,4 @@ frontend
 .npm-cache
 **/bin/**
 **/logs/
+**.pid

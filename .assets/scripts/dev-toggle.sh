@@ -30,6 +30,7 @@ Targets:
   auth                    backend/auth-service
   user                    backend/user-service
   notification            backend/notification-service
+  course                  backend/course-service
   frontend                frontend
 
 Examples:
@@ -80,6 +81,7 @@ normalize_target() {
     compose|gateway|infra|docker) printf 'compose' ;;
     auth|auth-service) printf 'auth' ;;
     user|user-service) printf 'user' ;;
+    course|course-service) printf 'course' ;;
     notification|notification-service|notif) printf 'notification' ;;
     frontend|front|web) printf 'frontend' ;;
     *) die "target tidak dikenal: $1" ;;
@@ -118,6 +120,7 @@ target_workdir() {
   case "$1" in
     auth) printf '%s/backend/auth-service' "$ROOT_DIR" ;;
     user) printf '%s/backend/user-service' "$ROOT_DIR" ;;
+    course) printf '%s/backend/course-service' "$ROOT_DIR" ;;
     notification) printf '%s/backend/notification-service' "$ROOT_DIR" ;;
     frontend) printf '%s/frontend' "$ROOT_DIR" ;;
     *) die "target lokal tidak dikenal: $1" ;;
@@ -128,6 +131,7 @@ target_command() {
   case "$1" in
     auth) printf './cmd/bin/main' ;;
     user) printf './mvnw spring-boot:run -DskipTests' ;;
+    course) printf './mvnw spring-boot:run -DskipTests' ;;
     notification) printf './mvnw spring-boot:run -DskipTests' ;;
     frontend) printf 'npm run dev -- --host 0.0.0.0' ;;
     *) die "command target lokal tidak dikenal: $1" ;;
@@ -146,7 +150,7 @@ preflight_local() {
       has_command go || die "go tidak ditemukan"
       [[ -f "$workdir/go.mod" ]] || die "go.mod tidak ditemukan di $workdir"
       ;;
-    user|notification)
+    course|user|notification)
       [[ -x "$workdir/mvnw" ]] || die "mvnw tidak executable/tidak ditemukan di $workdir"
       find "$workdir/src/main/java" -type f -name '*.java' -print -quit 2>/dev/null | grep -q . ||
         die "source Java belum ditemukan di $workdir/src/main/java"
@@ -169,7 +173,7 @@ is_local_available() {
     auth)
       has_command go && [[ -f "$workdir/go.mod" ]]
       ;;
-    user|notification)
+    course|user|notification)
       [[ -x "$workdir/mvnw" ]] && find "$workdir/src/main/java" -type f -name '*.java' -print -quit 2>/dev/null | grep -q .
       ;;
     frontend)
@@ -309,7 +313,7 @@ for_each_target() {
 start_target() {
   case "$1" in
     compose) compose_up ;;
-    auth|user|notification|frontend) start_local "$1" ;;
+    course|auth|user|notification|frontend) start_local "$1" ;;
     all)
       compose_up
       for item in "${LOCAL_TARGETS[@]}"; do
@@ -327,9 +331,9 @@ start_target() {
 stop_target() {
   case "$1" in
     compose) compose_down ;;
-    auth|user|notification|frontend) stop_local "$1" ;;
+    course|auth|user|notification|frontend) stop_local "$1" ;;
     all)
-      for item in frontend notification user auth compose; do
+      for item in frontend notification user auth course compose; do
         stop_target "$item"
       done
       ;;
@@ -340,10 +344,11 @@ stop_target() {
 status_target() {
   case "$1" in
     compose) compose_status ;;
-    auth|user|notification|frontend) status_local "$1" ;;
+    course|auth|user|notification|frontend) status_local "$1" ;;
     all)
       status_local auth
       status_local user
+      status_local course
       status_local notification
       status_local frontend
       compose_status
@@ -355,8 +360,8 @@ status_target() {
 logs_target() {
   case "$1" in
     compose) compose_logs ;;
-    auth|user|notification|frontend) logs_local "$1" ;;
-    all) die "logs perlu target spesifik: compose/auth/user/notification/frontend" ;;
+    course|auth|user|notification|frontend) logs_local "$1" ;;
+    all) die "logs perlu target spesifik: compose/auth/user/course/notification/frontend" ;;
     *) die "target logs tidak dikenal: $1" ;;
   esac
 }
@@ -386,7 +391,7 @@ toggle_target() {
         compose_up
       fi
       ;;
-    auth|user|notification|frontend)
+    course|auth|user|notification|frontend)
       if is_local_running "$1"; then
         stop_local "$1"
       else

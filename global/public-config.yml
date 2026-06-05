@@ -8,6 +8,9 @@ services:
   notification:
     host: localhost
     port: 8083
+  course:
+    host: localhost
+    port: 8084
 
 database:
   provider: postgresql
@@ -19,6 +22,7 @@ database:
   names:
     auth_service: mcr_auth
     user_service: mcr_user
+    course_service: mcr_course
 
 redis:
   host: localhost
