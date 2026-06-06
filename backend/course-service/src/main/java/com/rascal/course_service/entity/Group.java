@@ -1,14 +1,12 @@
 package com.rascal.course_service.entity;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,8 +22,8 @@ public class Group {
     @Column(name = "name", nullable = false)
     private String name;
     
-    @Column(name = "batch_id", nullable = false)
-    private Integer batchId;
+    @Column(name = "academic_year", nullable = false)
+    private String academicYear;
     
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -36,7 +34,4 @@ public class Group {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    @OneToMany(mappedBy = "group")
-    private Set<Enrollment> enrollments;
-    
 }

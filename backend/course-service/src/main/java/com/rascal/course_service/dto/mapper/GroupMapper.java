@@ -14,7 +14,6 @@ public final class GroupMapper {
     public static Group toEntity(GroupRequest request) {
         Group group = new Group();
         group.setName(request.name());
-        group.setBatchId(request.batchId());
 
         return group;
     }
@@ -22,14 +21,12 @@ public final class GroupMapper {
     public static GroupResponse toResponse(Group group) {
         return new GroupResponse(
             group.getId(),
-            group.getName(),
-            group.getBatchId()
+            group.getName()
         );
     }
 
     public static void updateEntity(Group group, GroupPatchRequest request) {
         if (request.name() != null) group.setName(request.name());
-        if (request.batchId() != null) group.setBatchId(request.batchId());
 
         group.setUpdatedAt(LocalDateTime.now());
     }
