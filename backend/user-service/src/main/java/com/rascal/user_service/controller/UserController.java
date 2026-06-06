@@ -1,5 +1,8 @@
 package com.rascal.user_service.controller;
 
+import java.util.Collection;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.rascal.user_service.dto.mapper.UserMapper;
 import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
+import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.service.UserService;
 
@@ -49,6 +53,15 @@ public class UserController {
             HttpStatus.OK, 
             users
         );
+    }
+
+    @GetMapping("/lookup")
+    @PreAuthorize("hasAnyAuthority('user.*', 'user.lookup')")
+    public ResponseEntity<?> lookupByIds(@RequestParam Collection<Long> ids) {
+        List<UserLookupResponse> responses = userService.lookupByIds(ids)
+            .stream().map(UserMapper::toLookupResponse).toList();
+
+        return ApiResponse.success(HttpStatus.OK, responses);
     }
 
     @GetMapping("/{id}")

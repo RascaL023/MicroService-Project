@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,8 +16,16 @@ import com.rascal.user_service.repository.projection.BatchUserCount;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    @EntityGraph(attributePaths = "batch")
     Page<User> findAllByDeletedAtIsNull(Pageable pageable);
+
+    @EntityGraph(attributePaths = "batch")
     Page<User> findByNameContainingIgnoreCaseAndDeletedAtIsNull(String name, Pageable pageable);
+
+    @EntityGraph(attributePaths = "batch")
+    List<User> findByIdInAndDeletedAtIsNull(Collection<Long> ids);
+
+    @EntityGraph(attributePaths = "batch")
     @Query("""
         select u
         from User u
@@ -29,6 +38,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
         @Param("batchId") Integer batchId,
         Pageable pageable
     );
+
+    @EntityGraph(attributePaths = "batch")
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
     boolean existsByEmailAndDeletedAtIsNull(String email);
     boolean existsByEmailAndIdNotAndDeletedAtIsNull(String email, Long id);

@@ -1,6 +1,7 @@
 package com.rascal.user_service.dto.mapper;
 
 import com.rascal.user_service.dto.request.UserRequest;
+import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.entity.User;
@@ -22,6 +23,15 @@ public class UserMapper {
             user.getStatus()
         );
 
+    }
+
+    public static UserLookupResponse toLookupResponse(User user) {
+        return new UserLookupResponse(
+            user.getId(),
+            user.getName(),
+            user.getGender(),
+            user.getBatch().getId()
+        );
     }
 
     public static User toEntity(UserRequest request) {

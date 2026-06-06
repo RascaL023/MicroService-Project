@@ -1,6 +1,8 @@
 package com.rascal.user_service.service;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 
 import org.springframework.data.domain.Page;
@@ -53,6 +55,13 @@ public class UserService {
         String normalizedName = name == null ? "" : normalizeSearchName(name);
 
         return userRepository.searchActiveUsers(normalizedName, batchId, pageable);
+    }
+
+    public List<User> lookupByIds(Collection<Long> ids) {
+        if (ids.size() > 100) throw new BadRequestException("Too much");
+        else if(ids == null || ids.size() == 0) return List.of();
+
+        return userRepository.findByIdInAndDeletedAtIsNull(ids);
     }
 
     @Transactional(readOnly = true)
