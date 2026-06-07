@@ -58,8 +58,8 @@ public class UserService {
     }
 
     public List<User> lookupByIds(Collection<Long> ids) {
-        if (ids.size() > 100) throw new BadRequestException("Too much");
-        else if(ids == null || ids.size() == 0) return List.of();
+        if (ids == null || ids.isEmpty()) return List.of();
+        else if (ids.size() > 100) throw new BadRequestException("Too much");
 
         return userRepository.findByIdInAndDeletedAtIsNull(ids);
     }

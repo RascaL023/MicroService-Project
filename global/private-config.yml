@@ -1,9 +1,9 @@
 admin:
-  email: rascal@example.com
+  email: rascal@gmail.com
   password: atmin123
 
 security:
-  internal_signature: atlanta23
+  internal_signature: atlanta331
 
 notification:
   email:
