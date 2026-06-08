@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.rascal.course_service.dto.mapper.SubjectMapper;
@@ -13,6 +14,7 @@ import com.rascal.course_service.entity.Subject;
 import com.rascal.course_service.repository.SubjectRepository;
 
 import id.rascal.response_kit.exception.BadRequestException;
+import id.rascal.response_kit.exception.ConflictException;
 import id.rascal.response_kit.exception.NotFoundException;
 
 @Service
@@ -39,7 +41,10 @@ public class SubjectService {
         Subject subject = SubjectMapper.toEntity(request);
         subject.setCreatedAt(LocalDateTime.now());
 
-        return subjectRepository.save(subject);
+        try { return subjectRepository.saveAndFlush(subject); } 
+        catch (DataIntegrityViolationException ex) {
+            throw new ConflictException("Subject already exist");
+        }
     }
 
     public Subject updateById(Long id, SubjectPatchRequest request) {
@@ -49,7 +54,10 @@ public class SubjectService {
         Subject subject = getById(id);
         SubjectMapper.updateEntity(subject, request);
 
-        return subjectRepository.save(subject);
+        try { return subjectRepository.saveAndFlush(subject); } 
+        catch (DataIntegrityViolationException ex) {
+            throw new ConflictException("Subject already exist");
+        }
     }
 
 

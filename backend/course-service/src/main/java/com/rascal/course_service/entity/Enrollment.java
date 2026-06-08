@@ -1,39 +1,48 @@
 package com.rascal.course_service.entity;
 
 import java.time.LocalDateTime;
-import java.util.Set;
+
+import com.rascal.course_service.enumerated.CourseRoleEnum;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
 @Entity
 @Getter @Setter
-@Table(name = "subjects")
-public class Subject {
+@Table(name = "enrollments")
+public class Enrollment {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false, unique = true)
-    private String name;
-    
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "role", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private CourseRoleEnum role;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
-    
+
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-    
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
-    
-    @OneToMany(mappedBy = "subject")
-    private Set<Group> groups;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "group_id", nullable = false)
+    private Group group;
 
 }

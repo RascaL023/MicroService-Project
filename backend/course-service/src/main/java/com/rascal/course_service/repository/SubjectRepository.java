@@ -11,6 +11,6 @@ import com.rascal.course_service.entity.Subject;
 public interface SubjectRepository extends JpaRepository<Subject, Long> {
 
     Page<Subject> findByDeletedAtIsNull(Pageable pageable);
-
     Optional<Subject> findByIdAndDeletedAtIsNull(Long id);
+
 }

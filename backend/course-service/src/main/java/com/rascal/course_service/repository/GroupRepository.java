@@ -11,6 +11,19 @@ import com.rascal.course_service.entity.Group;
 public interface GroupRepository extends JpaRepository<Group, Long> {
 
     Page<Group> findByDeletedAtIsNull(Pageable pageable);
-
     Optional<Group> findByIdAndDeletedAtIsNull(Long id);
+
+    boolean existsBySubject_IdAndAcademicYearAndNameIgnoreCaseAndDeletedAtIsNull(
+        Long subjectId,
+        String academicYear,
+        String name
+    );
+
+    boolean existsBySubject_IdAndAcademicYearAndNameIgnoreCaseAndIdNotAndDeletedAtIsNull(
+        Long subjectId,
+        String academicYear,
+        String name,
+        Long id
+    );
+
 }
