@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.rascal.course_service.dto.mapper.GroupMapper;
 import com.rascal.course_service.dto.request.GroupPatchRequest;
@@ -20,6 +21,7 @@ import id.rascal.response_kit.exception.ConflictException;
 import id.rascal.response_kit.exception.NotFoundException;
 
 @Service
+@Transactional
 public class GroupService {
 
     private final GroupRepository groupRepository;
@@ -33,13 +35,25 @@ public class GroupService {
         this.subjectRepository = subjectRepository;
     }
 
+    @Transactional(readOnly = true)
     public Group getById(Long id) {
         return groupRepository.findByIdAndDeletedAtIsNull(id)
             .orElseThrow(() -> new NotFoundException("Group not found"));
     }
 
-    public Page<Group> getAll(Pageable pageable) {
-        return groupRepository.findByDeletedAtIsNull(pageable);
+    @Transactional(readOnly = true)
+    public Page<Group> getAllPaged(
+        String name,
+        Long subjectId,
+        String academicYear,
+        Pageable pageable
+    ) {
+        return groupRepository.searchActiveGroups(
+            normalizeSearchName(name),
+            subjectId,
+            normalizeSearchAcademicYear(academicYear),
+            pageable
+        );
     }
 
     public Group create(GroupRequest request) {
@@ -118,5 +132,19 @@ public class GroupService {
             throw new BadRequestException("Academic year must be filled");
 
         return normalized;
+    }
+
+    private String normalizeSearchName(String name) {
+        if (name == null || name.isBlank())
+            return "";
+
+        return name.trim();
+    }
+
+    private String normalizeSearchAcademicYear(String academicYear) {
+        if (academicYear == null || academicYear.isBlank())
+            return null;
+
+        return academicYear.trim();
     }
 }

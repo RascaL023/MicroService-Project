@@ -12,13 +12,16 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.rascal.course_service.dto.mapper.GroupMapper;
 import com.rascal.course_service.dto.request.GroupPatchRequest;
 import com.rascal.course_service.dto.request.GroupRequest;
+import com.rascal.course_service.dto.response.EnrollmentResponse;
 import com.rascal.course_service.dto.response.GroupResponse;
 import com.rascal.course_service.entity.Group;
+import com.rascal.course_service.service.EnrollmentService;
 import com.rascal.course_service.service.GroupService;
 
 import id.rascal.response_kit.util.ApiResponse;
@@ -29,21 +32,26 @@ import jakarta.validation.Valid;
 public class GroupController {
 
     private final GroupService groupService;
+    private final EnrollmentService enrollmentService;
 
-    public GroupController(GroupService groupService) {
+    public GroupController(GroupService groupService, EnrollmentService enrollmentService) {
         this.groupService = groupService;
+        this.enrollmentService = enrollmentService;
     }
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('group.*', 'group.read')")
-    public ResponseEntity<?> getAllPaged(Pageable pageable) {
-        Page<GroupResponse> responses = groupService.getAll(pageable)
+    public ResponseEntity<?> getAllPaged(
+        @RequestParam(required = false) String name,
+        @RequestParam(required = false) Long subjectId,
+        @RequestParam(required = false) String academicYear,
+        Pageable pageable
+    ) {
+        Page<GroupResponse> responses = groupService
+            .getAllPaged(name, subjectId, academicYear, pageable)
             .map(this::groupResponse);
 
-        return ApiResponse.paged(
-            HttpStatus.OK,
-            responses
-        );
+        return ApiResponse.paged(HttpStatus.OK, responses);
     }
 
     @GetMapping("/{id}")
@@ -53,6 +61,15 @@ public class GroupController {
             HttpStatus.OK,
             groupResponse(groupService.getById(id))
         );
+    }
+
+    @GetMapping("/{id}/members")
+    @PreAuthorize("hasAnyAuthority('group.*', 'group.read', 'enrollment.*', 'enrollment.read')")
+    public ResponseEntity<?> getMembers(@PathVariable Long id, Pageable pageable) {
+        Page<EnrollmentResponse> responses = enrollmentService
+            .getAllPagedResponse(null, id, null, null, null, pageable);
+
+        return ApiResponse.paged(HttpStatus.OK, responses);
     }
 
     @PostMapping

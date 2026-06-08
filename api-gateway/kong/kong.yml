@@ -72,6 +72,8 @@ services:
       - name: course-public-route
         paths:
           - /api/subjects
+          - /api/groups
+          - /api/enrollments
         strip_path: false
         plugins:
           - name: cors

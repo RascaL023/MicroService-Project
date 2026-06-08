@@ -17,7 +17,7 @@ public class UserClientService {
 
     @Value("${services.internal_signature}")
     private String internalSignature;
-    private WebClient usersWebClient;
+    private final WebClient usersWebClient;
 
     public UserClientService(WebClient usersWebClient) {
         this.usersWebClient = usersWebClient;
@@ -44,8 +44,9 @@ public class UserClientService {
             .header("X-Internal-Signature", internalSignature)
             .retrieve()
             .bodyToMono(new ParameterizedTypeReference<ApiSuccessResponse<List<UserLookupResponse>>>() { })
-            .map(ApiSuccessResponse::data)
-        .block();
+            .map(response -> response.data() == null ? List.<UserLookupResponse>of() : response.data())
+            .blockOptional()
+            .orElse(List.of());
     }
     
 }
