@@ -5,11 +5,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUN_DIR="$ROOT_DIR/.assets/run"
 LOG_DIR="$RUN_DIR/logs"
 COMPOSE_FILE="$ROOT_DIR/api-gateway/docker-compose.yml"
+NGINX_CONF="${DEV_TOGGLE_NGINX_CONF:-$ROOT_DIR/reverse-proxy/nginx.conf}"
+NGINX_PREFIX="$RUN_DIR/nginx"
+NGINX_PID_FILE="$RUN_DIR/proxy.pid"
 
-mkdir -p "$RUN_DIR" "$LOG_DIR"
+mkdir -p "$RUN_DIR" "$LOG_DIR" "$NGINX_PREFIX/logs"
 
-TARGETS=(compose auth user notification frontend)
-LOCAL_TARGETS=(auth user notification frontend)
+TARGETS=(compose auth user course notification frontend proxy)
+LOCAL_TARGETS=(auth user course notification frontend)
 
 usage() {
   cat <<'EOF'
@@ -25,23 +28,30 @@ Commands:
   logs <target>           Tail logs for target
 
 Targets:
-  all                     compose + auth + user + notification + frontend
+  all                     compose + auth + user + course + notification + frontend + proxy
   compose|gateway|infra   api-gateway/docker-compose.yml
   auth                    backend/auth-service
   user                    backend/user-service
-  notification            backend/notification-service
   course                  backend/course-service
+  notification            backend/notification-service
   frontend                frontend
+  proxy|nginx             nginx reverse proxy on :9000
 
 Examples:
   ./.assets/scripts/toggle.sh toggle compose
   ./.assets/scripts/toggle.sh up all
   ./.assets/scripts/toggle.sh status
   ./.assets/scripts/toggle.sh logs user
+  ./.assets/scripts/toggle.sh toggle proxy
 
 Docker:
   Compose commands use sudo docker compose by default.
   Set DEV_TOGGLE_DOCKER_SUDO=0 to run docker without sudo.
+
+Nginx:
+  Proxy uses sudo nginx by default.
+  Set DEV_TOGGLE_NGINX_CONF=/path/to/nginx.conf to override config.
+  Set DEV_TOGGLE_NGINX_SUDO=0 to run nginx without sudo.
 EOF
 }
 
@@ -56,6 +66,18 @@ info() {
 
 has_command() {
   command -v "$1" >/dev/null 2>&1
+}
+
+port_listening() {
+  local port="$1"
+
+  if has_command ss; then
+    ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "(:|\\])$port$"
+  elif has_command lsof; then
+    lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+  else
+    return 1
+  fi
 }
 
 docker_compose_cmd() {
@@ -84,6 +106,7 @@ normalize_target() {
     course|course-service) printf 'course' ;;
     notification|notification-service|notif) printf 'notification' ;;
     frontend|front|web) printf 'frontend' ;;
+    proxy|nginx|reverse-proxy) printf 'proxy' ;;
     *) die "target tidak dikenal: $1" ;;
   esac
 }
@@ -297,6 +320,98 @@ logs_local() {
   tail -f "$logfile"
 }
 
+nginx_cmd() {
+  local sudo_prefix=""
+
+  has_command nginx || die "nginx tidak ditemukan"
+  if [[ "${DEV_TOGGLE_NGINX_SUDO:-1}" != "0" && "$(id -u)" != "0" ]]; then
+    has_command sudo || die "sudo tidak ditemukan, padahal nginx diset memakai sudo"
+    sudo_prefix="sudo "
+  fi
+
+  printf '%snginx' "$sudo_prefix"
+}
+
+is_proxy_running() {
+  local pid=""
+  [[ -f "$NGINX_PID_FILE" ]] && pid="$(sed -n '1p' "$NGINX_PID_FILE")"
+  is_pid_running "$pid"
+}
+
+start_proxy() {
+  [[ -f "$NGINX_CONF" ]] || die "nginx config tidak ditemukan: $NGINX_CONF"
+  if is_proxy_running; then
+    info "proxy sudah running (pid $(sed -n '1p' "$NGINX_PID_FILE"))"
+    return 0
+  fi
+  if port_listening 9000; then
+    die "port 9000 sudah dipakai proses luar; hentikan proses itu dulu, lalu start proxy lewat script agar managed"
+  fi
+
+  local nginx logfile
+  nginx="$(nginx_cmd)"
+  logfile="$(log_file proxy)"
+
+  info "starting proxy with nginx config: $NGINX_CONF"
+  info "log: $logfile"
+
+  (
+    exec $nginx -p "$NGINX_PREFIX" -c "$NGINX_CONF" \
+      -g "daemon off; pid $NGINX_PREFIX/logs/nginx.pid; error_log $LOG_DIR/proxy-error.log;"
+  ) >"$logfile" 2>&1 &
+
+  printf '%s\n' "$!" >"$NGINX_PID_FILE"
+  sleep 0.5
+
+  if is_proxy_running; then
+    info "proxy running (pid $(sed -n '1p' "$NGINX_PID_FILE"))"
+  else
+    rm -f "$NGINX_PID_FILE"
+    die "proxy gagal start atau pid file tidak dibuat: $NGINX_PID_FILE"
+  fi
+}
+
+stop_proxy() {
+  if ! is_proxy_running; then
+    rm -f "$NGINX_PID_FILE"
+    info "proxy tidak running"
+    return 0
+  fi
+
+  local pid
+  pid="$(sed -n '1p' "$NGINX_PID_FILE")"
+  info "stopping proxy (pid $pid)"
+  kill "$pid" >/dev/null 2>&1 || true
+
+  for _ in {1..20}; do
+    if ! is_pid_running "$pid"; then
+      rm -f "$NGINX_PID_FILE"
+      info "proxy stopped"
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  info "proxy belum berhenti, kirim SIGKILL"
+  kill -9 "$pid" >/dev/null 2>&1 || true
+  rm -f "$NGINX_PID_FILE"
+}
+
+status_proxy() {
+  if is_proxy_running; then
+    printf '%-14s running pid=%s log=%s config=%s\n' "proxy" "$(sed -n '1p' "$NGINX_PID_FILE")" "$(log_file proxy)" "$NGINX_CONF"
+  else
+    printf '%-14s stopped log=%s config=%s\n' "proxy" "$(log_file proxy)" "$NGINX_CONF"
+  fi
+}
+
+logs_proxy() {
+  local logfile
+  logfile="$(log_file proxy)"
+  [[ -f "$logfile" ]] || die "log proxy belum ada: $logfile"
+  tail -f "$logfile"
+}
+
 for_each_target() {
   local action="$1"
   local target="$2"
@@ -314,6 +429,7 @@ start_target() {
   case "$1" in
     compose) compose_up ;;
     course|auth|user|notification|frontend) start_local "$1" ;;
+    proxy) start_proxy ;;
     all)
       compose_up
       for item in "${LOCAL_TARGETS[@]}"; do
@@ -323,6 +439,7 @@ start_target() {
           info "skip $item: belum runnable atau tool belum tersedia"
         fi
       done
+      start_proxy
       ;;
     *) die "target start tidak dikenal: $1" ;;
   esac
@@ -332,8 +449,9 @@ stop_target() {
   case "$1" in
     compose) compose_down ;;
     course|auth|user|notification|frontend) stop_local "$1" ;;
+    proxy) stop_proxy ;;
     all)
-      for item in frontend notification user auth course compose; do
+      for item in proxy frontend notification course user auth compose; do
         stop_target "$item"
       done
       ;;
@@ -345,12 +463,14 @@ status_target() {
   case "$1" in
     compose) compose_status ;;
     course|auth|user|notification|frontend) status_local "$1" ;;
+    proxy) status_proxy ;;
     all)
       status_local auth
       status_local user
       status_local course
       status_local notification
       status_local frontend
+      status_proxy
       compose_status
       ;;
     *) die "target status tidak dikenal: $1" ;;
@@ -361,7 +481,8 @@ logs_target() {
   case "$1" in
     compose) compose_logs ;;
     course|auth|user|notification|frontend) logs_local "$1" ;;
-    all) die "logs perlu target spesifik: compose/auth/user/course/notification/frontend" ;;
+    proxy) logs_proxy ;;
+    all) die "logs perlu target spesifik: compose/auth/user/course/notification/frontend/proxy" ;;
     *) die "target logs tidak dikenal: $1" ;;
   esac
 }
@@ -389,6 +510,13 @@ toggle_target() {
         compose_down
       else
         compose_up
+      fi
+      ;;
+    proxy)
+      if is_proxy_running; then
+        stop_proxy
+      else
+        start_proxy
       fi
       ;;
     course|auth|user|notification|frontend)
