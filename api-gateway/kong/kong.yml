@@ -74,6 +74,7 @@ services:
           - /api/subjects
           - /api/groups
           - /api/enrollments
+          - /api/group-schedules
         strip_path: false
         plugins:
           - name: cors
