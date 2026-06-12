@@ -50,7 +50,9 @@ INSERT INTO authorities(name) VALUES
 	('batch.create'), ('batch.read'), ('batch.update'), ('batch.delete'),
 	('batch.*'),
 	('subject.create'), ('subject.read'), ('subject.update'), ('subject.delete'),
-	('subject.*')
+	('subject.*'),
+	('subject-material.create'), ('subject-material.read'), ('subject-material.update'), ('subject-material.delete'),
+	('subject-material.*')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO roles(name, created_at) VALUES
@@ -61,8 +63,10 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
-JOIN authorities a ON a.name IN ('user.*', 'batch.*', 'subject.*')
-WHERE r.name = 'ADMIN'
+JOIN authorities a ON a.name IN (
+    'user.*', 'batch.*', 
+    'subject.*', 'subject-material.*'
+) WHERE r.name = 'ADMIN'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO authorities_roles(role_id, authority_id)
@@ -71,7 +75,8 @@ FROM roles r
 JOIN authorities a ON a.name IN (
     'user.read', 'user.update',
     'batch.read',
-    'subject.read'
+    'subject.read',
+    'subject-material.read'
 ) WHERE r.name = 'USER'
 ON CONFLICT DO NOTHING;
 

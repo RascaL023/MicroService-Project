@@ -12,95 +12,77 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.rascal.course_service.dto.mapper.SubjectMaterialMapper;
-import com.rascal.course_service.dto.mapper.SubjectMapper;
-import com.rascal.course_service.dto.request.SubjectPatchRequest;
-import com.rascal.course_service.dto.request.SubjectRequest;
+import com.rascal.course_service.dto.request.SubjectMaterialPatchRequest;
+import com.rascal.course_service.dto.request.SubjectMaterialRequest;
 import com.rascal.course_service.dto.response.SubjectMaterialResponse;
-import com.rascal.course_service.dto.response.SubjectResponse;
 import com.rascal.course_service.service.SubjectMaterialService;
-import com.rascal.course_service.service.SubjectService;
 
 import id.rascal.response_kit.util.ApiResponse;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/subjects")
-public class SubjectController {
+@RequestMapping("/api/subject-materials")
+public class SubjectMaterialController {
 
-    private final SubjectService subjectService;
     private final SubjectMaterialService subjectMaterialService;
 
-    public SubjectController(
-        SubjectService subjectService,
-        SubjectMaterialService subjectMaterialService
-    ) {
-        this.subjectService = subjectService;
+    public SubjectMaterialController(SubjectMaterialService subjectMaterialService) {
         this.subjectMaterialService = subjectMaterialService;
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.read')")
-    public ResponseEntity<?> getAllPaged(Pageable pageable) {
-        Page<SubjectResponse> responses = subjectService.getAll(pageable)
-            .map(SubjectMapper::toResponse);
-
-        return ApiResponse.paged(
-            HttpStatus.OK, 
-            responses
-        );
-    }
-    
-    @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.read')")
-    public ResponseEntity<?> getById(@PathVariable Long id) {
-        return ApiResponse.success(
-            HttpStatus.OK, 
-            SubjectMapper.toResponse(subjectService.getById(id))
-        );
-    }
-
-    @GetMapping("/{id}/materials")
     @PreAuthorize("hasAnyAuthority('subject.*', 'subject.read', 'subject-material.*', 'subject-material.read')")
-    public ResponseEntity<?> getMaterials(@PathVariable Long id, Pageable pageable) {
+    public ResponseEntity<?> getAllPaged(
+        @RequestParam(required = false) Long subjectId,
+        @RequestParam(required = false) String title,
+        Pageable pageable
+    ) {
         Page<SubjectMaterialResponse> responses = subjectMaterialService
-            .getAllPaged(id, null, pageable)
+            .getAllPaged(subjectId, title, pageable)
             .map(SubjectMaterialMapper::toResponse);
 
         return ApiResponse.paged(HttpStatus.OK, responses);
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.read', 'subject-material.*', 'subject-material.read')")
+    public ResponseEntity<?> getById(@PathVariable Long id) {
+        return ApiResponse.success(
+            HttpStatus.OK,
+            SubjectMaterialMapper.toResponse(subjectMaterialService.getById(id))
+        );
+    }
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.create')")
-    public ResponseEntity<?> create(@Valid @RequestBody SubjectRequest request) {
+    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.update', 'subject-material.*', 'subject-material.create')")
+    public ResponseEntity<?> create(@Valid @RequestBody SubjectMaterialRequest request) {
         return ApiResponse.success(
             HttpStatus.CREATED,
-            SubjectMapper.toResponse(subjectService.create(request))
+            SubjectMaterialMapper.toResponse(subjectMaterialService.create(request))
         );
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.update')")
+    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.update', 'subject-material.*', 'subject-material.update')")
     public ResponseEntity<?> updateById(
         @PathVariable Long id,
-        @Valid @RequestBody SubjectPatchRequest request
+        @Valid @RequestBody SubjectMaterialPatchRequest request
     ) {
         return ApiResponse.success(
             HttpStatus.OK,
-            SubjectMapper.toResponse(subjectService.updateById(id, request))
+            SubjectMaterialMapper.toResponse(subjectMaterialService.updateById(id, request))
         );
     }
 
-
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.delete')")
+    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.update', 'subject-material.*', 'subject-material.delete')")
     public ResponseEntity<?> deleteById(@PathVariable Long id) {
-        subjectService.deleteById(id);
+        subjectMaterialService.deleteById(id);
 
         return ResponseEntity.noContent().build();
     }
-    
 }
