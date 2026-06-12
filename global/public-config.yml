@@ -43,7 +43,7 @@ default_pagination:
 auth:
   session_ttl_hours: 24
   activation_ttl_minutes: 30
-  activation_url: "http://localhost:5173/activate"
+  activation_url: "https://dev.rascal.my.id/activate"
 
 notification:
   email:

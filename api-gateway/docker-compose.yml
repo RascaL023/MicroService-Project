@@ -22,3 +22,10 @@ services:
     image: redis:7
     container_name: kong-redis
     network_mode: host
+    command: >
+      redis-server
+      --appendonly yes
+      --save 60 1
+    volumes:
+      - ./redis_data:/data
+    restart: unless-stopped
