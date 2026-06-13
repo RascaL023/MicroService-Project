@@ -15,12 +15,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.rascal.course_service.dto.mapper.SubjectMaterialMapper;
+import com.rascal.course_service.dto.mapper.SubjectModuleMapper;
 import com.rascal.course_service.dto.mapper.SubjectMapper;
 import com.rascal.course_service.dto.request.SubjectPatchRequest;
 import com.rascal.course_service.dto.request.SubjectRequest;
 import com.rascal.course_service.dto.response.SubjectMaterialResponse;
+import com.rascal.course_service.dto.response.SubjectModuleResponse;
 import com.rascal.course_service.dto.response.SubjectResponse;
 import com.rascal.course_service.service.SubjectMaterialService;
+import com.rascal.course_service.service.SubjectModuleService;
 import com.rascal.course_service.service.SubjectService;
 
 import id.rascal.response_kit.util.ApiResponse;
@@ -32,13 +35,16 @@ public class SubjectController {
 
     private final SubjectService subjectService;
     private final SubjectMaterialService subjectMaterialService;
+    private final SubjectModuleService subjectModuleService;
 
     public SubjectController(
         SubjectService subjectService,
-        SubjectMaterialService subjectMaterialService
+        SubjectMaterialService subjectMaterialService,
+        SubjectModuleService subjectModuleService
     ) {
         this.subjectService = subjectService;
         this.subjectMaterialService = subjectMaterialService;
+        this.subjectModuleService = subjectModuleService;
     }
 
     @GetMapping
@@ -68,6 +74,16 @@ public class SubjectController {
         Page<SubjectMaterialResponse> responses = subjectMaterialService
             .getAllPaged(id, null, pageable)
             .map(SubjectMaterialMapper::toResponse);
+
+        return ApiResponse.paged(HttpStatus.OK, responses);
+    }
+
+    @GetMapping("/{id}/modules")
+    @PreAuthorize("hasAnyAuthority('subject.*', 'subject.read', 'subject-module.*', 'subject-module.read')")
+    public ResponseEntity<?> getModules(@PathVariable Long id, Pageable pageable) {
+        Page<SubjectModuleResponse> responses = subjectModuleService
+            .getAllPaged(id, null, pageable)
+            .map(SubjectModuleMapper::toResponse);
 
         return ApiResponse.paged(HttpStatus.OK, responses);
     }

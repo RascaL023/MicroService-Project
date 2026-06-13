@@ -16,6 +16,11 @@ spring:
     password: ${database.password:}
     driver-class-name: org.postgresql.Driver
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
   data:
     redis:
       host: ${redis.host:localhost}
@@ -45,3 +50,7 @@ services:
   url:
     user: http://${services.user.host:localhost}:${services.user.port:8082}/api/users
   internal_signature: ${security.internal_signature:atlanta331}
+
+app:
+  storage:
+    upload-dir: uploads

@@ -39,4 +39,7 @@ public class Subject {
     @OneToMany(mappedBy = "subject")
     private Set<SubjectMaterial> subjectMaterials;
 
+    @OneToMany(mappedBy = "subject")
+    private Set<SubjectModule> files;
+
 }
