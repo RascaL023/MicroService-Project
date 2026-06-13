@@ -3,8 +3,6 @@ package com.rascal.course_service.service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,18 +31,18 @@ public class EnrollmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final GroupRepository groupRepository;
     private final CurrentUserService currentUserService;
-    private final UserClientService userClientService;
+    private final CourseUserCacheService courseUserCacheService;
 
     public EnrollmentService(
         EnrollmentRepository enrollmentRepository,
         GroupRepository groupRepository,
         CurrentUserService currentUserService,
-        UserClientService userClientService
+        CourseUserCacheService courseUserCacheService
     ) {
         this.enrollmentRepository = enrollmentRepository;
         this.groupRepository = groupRepository;
         this.currentUserService = currentUserService;
-        this.userClientService = userClientService;
+        this.courseUserCacheService = courseUserCacheService;
     }
 
     @Transactional(readOnly = true)
@@ -182,17 +180,11 @@ public class EnrollmentService {
     }
 
     private Map<Long, UserLookupResponse> lookupUsersById(List<Long> userIds) {
-        return userClientService.lookupUsersByIds(userIds)
-            .stream()
-            .collect(Collectors.toMap(
-                UserLookupResponse::id,
-                Function.identity(),
-                (left, right) -> left
-            ));
+        return courseUserCacheService.lookupByIds(userIds);
     }
 
     private void requireExistingUser(Long userId) {
-        if (!lookupUsersById(List.of(userId)).containsKey(userId))
+        if (!courseUserCacheService.existsActive(userId))
             throw new NotFoundException("User not found");
     }
 
@@ -221,4 +213,5 @@ public class EnrollmentService {
     private String normalizeSearchAcademicYear(String academicYear) {
         return academicYear == null || academicYear.isBlank() ? null : academicYear.trim();
     }
+
 }

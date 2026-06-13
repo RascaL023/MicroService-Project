@@ -43,6 +43,10 @@ public class UserEventPublisher {
         ));
     }
 
+    public void userProfileUpdated(User user) {
+        publish("UserProfileUpdated", user, Map.of());
+    }
+
     public void userStatusUpdated(User user) {
         publish("UserStatusUpdated", user, Map.of(
             "status", user.getStatus()
@@ -64,12 +68,16 @@ public class UserEventPublisher {
         body.put("type", type);
         body.put("userId", String.valueOf(user.getId()));
         body.put("email", user.getEmail());
+        body.put("name", user.getName());
+        body.put("gender", String.valueOf(user.getGender()));
+        body.put("batch", String.valueOf(user.getBatch().getId()));
         body.putAll(extra);
 
         try {
             redisTemplate.opsForStream().add(MapRecord.create(stream, body));
         } catch (RuntimeException err) {
-            log.warn("Failed to publish {} event for user {}", type, user.getId(), err);
+            log.warn("Failed to publish {} event for user {}: {}", type, user.getId(), err.getMessage());
+            log.debug("User event publish failure detail", err);
         }
     }
 
@@ -80,4 +88,5 @@ public class UserEventPublisher {
             .map(String::valueOf)
             .collect(Collectors.joining(","));
     }
+
 }

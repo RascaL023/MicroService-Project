@@ -46,11 +46,6 @@ server:
   address: ${services.course.host:localhost}
   port: ${services.course.port:8084}
 
-services:
-  url:
-    user: http://${services.user.host:localhost}:${services.user.port:8082}/api/users
-  internal_signature: ${security.internal_signature:atlanta331}
-
 app:
   storage:
     upload-dir: uploads

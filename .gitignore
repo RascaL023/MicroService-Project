@@ -46,3 +46,4 @@ frontend
 **.pid
 backend/course-service/uploads/
 redis_data
+**/test/**

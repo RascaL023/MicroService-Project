@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -104,6 +105,9 @@ public class UserService {
         User user = getById(id);
         String oldEmail = user.getEmail();
         String oldStatus = user.getStatus();
+        String oldName = user.getName();
+        Character oldGender = user.getGender();
+        Integer oldBatch = user.getBatch().getId();
 
         if (request.email() != null) {
             String email = normalizeEmail(request.email());
@@ -119,15 +123,19 @@ public class UserService {
         user.setUpdatedAt(LocalDateTime.now());
 
         User saved = userRepository.save(user);
-        if (request.email() != null && !oldEmail.equals(saved.getEmail())) {
+        boolean profileChanged =
+            !Objects.equals(oldName, saved.getName()) ||
+            !Objects.equals(oldGender, saved.getGender()) ||
+            !Objects.equals(oldBatch, saved.getBatch().getId());
+
+        if (profileChanged) 
+            eventPublisher.userProfileUpdated(saved);
+        if (request.email() != null && !oldEmail.equals(saved.getEmail())) 
             eventPublisher.userEmailUpdated(saved, oldEmail);
-        }
-        if (request.status() != null && !saved.getStatus().equals(oldStatus)) {
+        if (request.status() != null && !saved.getStatus().equals(oldStatus)) 
             eventPublisher.userStatusUpdated(saved);
-        }
-        if (request.roleIds() != null) {
+        if (request.roleIds() != null) 
             eventPublisher.userRolesUpdated(saved, request.roleIds());
-        }
 
         return saved;
     }
