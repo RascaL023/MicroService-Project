@@ -49,14 +49,30 @@ INSERT INTO authorities(name) VALUES
 	('user.*'),
 	('batch.create'), ('batch.read'), ('batch.update'), ('batch.delete'),
 	('batch.*'),
+
+	('course.create'), ('course.read'), ('course.update'), ('course.delete'),
+	('course.*'),
+	('group.create'), ('group.read'), ('group.update'), ('group.delete'),
+	('group.*'),
+    ('group-schedule.create'), ('group-schedule.read'), ('group-schedule.update'), ('group-schedule.delete'),
+    ('group-schedule.*'),
+	('enrollment.create'), ('enrollment.read'), ('enrollment.update'), ('enrollment.delete'),
+	('enrollment.*'),
+
 	('subject.create'), ('subject.read'), ('subject.update'), ('subject.delete'),
 	('subject.*'),
 	('subject-material.create'), ('subject-material.read'), ('subject-material.update'), ('subject-material.delete'),
-	('subject-material.*')
+	('subject-material.*'),
+	('subject-module.create'), ('subject-module.read'), ('subject-module.update'), ('subject-module.delete'),
+	('subject-module.*')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO roles(name, created_at) VALUES
 	('ADMIN', now()),
+	('CHIEF', now()),
+	('CHIEF_DEPUTY', now()),
+	('CHIEF_INSTRUCTOR', now()),
+	('CHIEF_DEPUTY_INSTRUCTOR', now()),
 	('USER', now())
 ON CONFLICT (name) DO NOTHING;
 
@@ -65,7 +81,10 @@ SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
     'user.*', 'batch.*', 
-    'subject.*', 'subject-material.*'
+    'course.*', 'group.*', 
+    'group-schedule.*', 'enrollment.*', 
+    'subject.*', 'subject-material.*',
+    'subject-module.*'
 ) WHERE r.name = 'ADMIN'
 ON CONFLICT DO NOTHING;
 
@@ -73,22 +92,55 @@ INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
-    'user.read', 'user.update',
-    'batch.read',
-    'subject.read',
-    'subject-material.read'
+    'user.*', 'batch.*'
+) WHERE r.name = 'CHIEF'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO authorities_roles(role_id, authority_id)
+SELECT r.id, a.id
+FROM roles r
+JOIN authorities a ON a.name IN (
+    'user.update', 'batch.update'
+) WHERE r.name = 'CHIEF_DEPUTY'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO authorities_roles(role_id, authority_id)
+SELECT r.id, a.id
+FROM roles r
+JOIN authorities a ON a.name IN (
+    'course.*', 'group.*', 'group-schedule.*',
+    'subject.*', 'subject-material.*',
+    'subject-module.*'
+) WHERE r.name = 'CHIEF_INSTRUCTOR'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO authorities_roles(role_id, authority_id)
+SELECT r.id, a.id
+FROM roles r
+JOIN authorities a ON a.name IN (
+    'course.update', 'group.update', 'group-schedule.update',
+    'subject.update', 'subject-material.update',
+    'subject-module.update',
+    'course.delete', 'group.delete', 'group-schedule.delete',
+    'subject.delete', 'subject-material.delete',
+    'subject-module.delete'
+) WHERE r.name = 'CHIEF_DEPUTY_INSTRUCTOR'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO authorities_roles(role_id, authority_id)
+SELECT r.id, a.id
+FROM roles r
+JOIN authorities a ON a.name IN (
+    'user.read', 'batch.read', 
+    'course.read', 'group.read', 
+    'group-schedule.read', 'enrollment.read', 
+    'subject.read', 'subject-material.read',
+    'subject-module.read'
 ) WHERE r.name = 'USER'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO users(id, email, hash_password, created_at, status) VALUES 
-    (1, 'asep2345', '$2a$10$wP/Zqv4FMKxYj6MzmnKg5eaQ8C/Pjrubrh5tojRbB8M6H5WiwGZMa', NOW(), 'ACTIVE');
 
-INSERT INTO users_roles(user_id, role_id)
-SELECT u.id, r.id
-FROM roles r
-JOIN users u ON r.name IN ('USER')
-WHERE u.id = 1
-ON CONFLICT DO NOTHING;
+
 
 
 SELECT 
@@ -97,4 +149,4 @@ SELECT
 FROM authorities_roles ar
     JOIN roles r ON r.id = ar.role_id
     JOIN authorities a ON a.id = ar.authority_id
-GROUP BY r.name;
+GROUP BY r.id ORDER BY r.id;
