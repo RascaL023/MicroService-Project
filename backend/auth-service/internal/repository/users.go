@@ -75,18 +75,24 @@ func (r *UserRepository) CreateBootstrapAdmin(ctx context.Context, id int64, ema
 
 func (r *UserRepository) Provision(ctx context.Context, userID int64, email string, roleIDs []int64, upstreamStatus string) (entity.User, error) {
 	tx, err := r.pool.Begin(ctx)
-	if err != nil { return entity.User{}, err }
+	if err != nil {
+		return entity.User{}, err
+	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	status := AccountPendingActivation
-	if upstreamStatus == AccountBanned { status = AccountBanned }
+	if upstreamStatus == AccountBanned {
+		status = AccountBanned
+	}
 
 	_, err = tx.Exec(ctx, `
 		UPDATE users
 		SET deleted_at=now(), updated_at=now()
 		WHERE email=$1 AND id<>$2 AND deleted_at IS NULL
 	`, email, userID)
-	if err != nil { return entity.User{}, err }
+	if err != nil {
+		return entity.User{}, err
+	}
 
 	var user entity.User
 	err = tx.QueryRow(ctx, `
@@ -113,7 +119,9 @@ func (r *UserRepository) Provision(ctx context.Context, userID int64, email stri
 		&user.DeletedAt,
 	)
 	if err != nil {
-		if isDuplicate(err) { return entity.User{}, ErrDuplicate }
+		if isDuplicate(err) {
+			return entity.User{}, ErrDuplicate
+		}
 		return entity.User{}, err
 	}
 	if err := replaceRoles(ctx, tx, userID, roleIDs); err != nil {
@@ -129,7 +137,9 @@ func (r *UserRepository) Provision(ctx context.Context, userID int64, email stri
 
 func (r *UserRepository) ProvisionDefaultUser(ctx context.Context, userID int64, email string) (entity.User, error) {
 	roleID, err := r.roleIDByName(ctx, DefaultUserRole)
-	if err != nil { return entity.User{}, err }
+	if err != nil {
+		return entity.User{}, err
+	}
 
 	return r.Provision(ctx, userID, email, []int64{roleID}, AccountActive)
 }
@@ -193,6 +203,97 @@ func (r *UserRepository) SetStatus(ctx context.Context, id int64, status string)
 	}
 
 	return user, nil
+}
+
+func (r *UserRepository) SetManagedRole(ctx context.Context, userID, roleID int64) (entity.User, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return entity.User{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := lockActiveUser(ctx, tx, userID); err != nil {
+		return entity.User{}, err
+	}
+	defaultRoleID, err := roleIDByName(ctx, tx, DefaultUserRole)
+	if err != nil {
+		return entity.User{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, roleID); err != nil {
+		return entity.User{}, err
+	}
+	assigned, err := roleAssignedToAnotherActiveUser(ctx, tx, userID, roleID)
+	if err != nil {
+		return entity.User{}, err
+	}
+	if assigned {
+		return entity.User{}, ErrDuplicate
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO users_roles (user_id, role_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, userID, defaultRoleID); err != nil {
+		return entity.User{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO users_roles (user_id, role_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, userID, roleID); err != nil {
+		return entity.User{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return entity.User{}, err
+	}
+
+	return r.FindByID(ctx, userID)
+}
+
+func (r *UserRepository) DemoteToDefaultRole(ctx context.Context, userID int64) (entity.User, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return entity.User{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := lockActiveUser(ctx, tx, userID); err != nil {
+		return entity.User{}, err
+	}
+	defaultRoleID, err := roleIDByName(ctx, tx, DefaultUserRole)
+	if err != nil {
+		return entity.User{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM users_roles
+		WHERE user_id=$1
+			AND role_id NOT IN (
+				SELECT id
+				FROM roles
+				WHERE name IN ($2, 'ADMIN') AND deleted_at IS NULL
+			)
+	`, userID, DefaultUserRole); err != nil {
+		return entity.User{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO users_roles (user_id, role_id)
+		VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+	`, userID, defaultRoleID); err != nil {
+		return entity.User{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return entity.User{}, err
+	}
+
+	return r.FindByID(ctx, userID)
 }
 
 func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.User, int, error) {
@@ -347,6 +448,53 @@ func (r *UserRepository) authoritiesForRole(ctx context.Context, roleID int64) (
 
 type roleTx interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+type userRoleTx interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func lockActiveUser(ctx context.Context, tx userRoleTx, userID int64) error {
+	var id int64
+	err := tx.QueryRow(ctx, `
+		SELECT id
+		FROM users
+		WHERE id=$1 AND deleted_at IS NULL
+		FOR UPDATE
+	`, userID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func roleAssignedToAnotherActiveUser(ctx context.Context, tx userRoleTx, userID, roleID int64) (bool, error) {
+	var exists bool
+	err := tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM users_roles ur
+			JOIN users u ON u.id=ur.user_id
+			WHERE ur.role_id=$1
+				AND ur.user_id<>$2
+				AND u.deleted_at IS NULL
+		)
+	`, roleID, userID).Scan(&exists)
+	return exists, err
+}
+
+func roleIDByName(ctx context.Context, tx userRoleTx, name string) (int64, error) {
+	var id int64
+	err := tx.QueryRow(ctx, `
+		SELECT id
+		FROM roles
+		WHERE name=$1 AND deleted_at IS NULL
+	`, name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	return id, err
 }
 
 func replaceRoles(ctx context.Context, tx roleTx, userID int64, roleIDs []int64) error {

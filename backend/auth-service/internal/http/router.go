@@ -48,6 +48,8 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/", server.listUsers)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/{id}", server.getUserByID)
 		r.With(server.requireAnyAuthority("user.update", "user.*")).Patch("/{id}/status", server.updateUserStatus)
+		r.With(server.requireAuthority("user.*")).Patch("/{id}/role", server.setUserRole)
+		r.With(server.requireAuthority("user.*")).Delete("/{id}/role", server.demoteUserRole)
 	})
 
 	router.Route("/api/auths", func(r chi.Router) {
@@ -123,6 +125,25 @@ func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 
 	userResponse, err := s.authSvc.UpdateUserStatus(r.Context(), id, req)
 	respond(w, http.StatusOK, "User status updated successfully", userResponse, err)
+}
+
+func (s *Server) setUserRole(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok { return }
+
+	var req request.UserRoleRequest
+	if !decode(w, r, &req) { return }
+
+	userResponse, err := s.userSvc.SetManagedRole(r.Context(), id, req)
+	respond(w, http.StatusOK, "User role updated successfully", userResponse, err)
+}
+
+func (s *Server) demoteUserRole(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok { return }
+
+	userResponse, err := s.userSvc.DemoteToDefaultRole(r.Context(), id)
+	respond(w, http.StatusOK, "User role demoted successfully", userResponse, err)
 }
 
 func decode(w http.ResponseWriter, r *http.Request, target any) bool {
