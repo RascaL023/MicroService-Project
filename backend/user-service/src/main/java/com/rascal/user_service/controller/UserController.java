@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.rascal.user_service.dto.mapper.UserMapper;
 import com.rascal.user_service.dto.request.UserPatchRequest;
@@ -85,12 +87,20 @@ public class UserController {
         );
     }
 
+    @PostMapping(value = "/bulk/excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyAuthority('user.*', 'user.create')")
+    public ResponseEntity<?> bulkCreateByExcel(@RequestParam MultipartFile file) {
+        return ApiResponse.success(
+            HttpStatus.CREATED,
+            userService.bulkImportExcel(file)
+        );
+    }
+
 
     @PatchMapping("/{id}")
     @PreAuthorize("""
         hasAuthority('user.*') or (
-            #id == authentication.name and #request.status == null and 
-            #request.batch == null and #request.gender == null
+            #id == authentication.name and #request.batch == null and #request.gender == null
         )
     """
     ) public ResponseEntity<?> patchById(

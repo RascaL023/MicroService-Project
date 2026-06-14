@@ -1,11 +1,8 @@
 package com.rascal.user_service.dto.request;
 
-import java.util.List;
-
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -24,8 +21,5 @@ public record UserRequest(
     Integer batch,
     
     @NotNull(message = "Gender must be filled")
-    Character gender,
-    
-    @NotEmpty(message = "Role cannot be empty")
-    List<Long> roleIds
+    Character gender
 ) { }

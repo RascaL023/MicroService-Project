@@ -1,9 +1,7 @@
 package com.rascal.user_service.event;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,11 +28,8 @@ public class UserEventPublisher {
         this.stream = stream;
     }
 
-    public void userCreated(User user, List<Long> roleIds) {
-        publish("UserCreated", user, Map.of(
-            "roleIds", join(roleIds),
-            "status", user.getStatus()
-        ));
+    public void userCreated(User user) {
+        publish("UserCreated", user, Map.of());
     }
 
     public void userEmailUpdated(User user, String oldEmail) {
@@ -45,18 +40,6 @@ public class UserEventPublisher {
 
     public void userProfileUpdated(User user) {
         publish("UserProfileUpdated", user, Map.of());
-    }
-
-    public void userStatusUpdated(User user) {
-        publish("UserStatusUpdated", user, Map.of(
-            "status", user.getStatus()
-        ));
-    }
-
-    public void userRolesUpdated(User user, List<Long> roleIds) {
-        publish("UserRolesUpdated", user, Map.of(
-            "roleIds", join(roleIds)
-        ));
     }
 
     public void userDeleted(User user) {
@@ -79,14 +62,6 @@ public class UserEventPublisher {
             log.warn("Failed to publish {} event for user {}: {}", type, user.getId(), err.getMessage());
             log.debug("User event publish failure detail", err);
         }
-    }
-
-    private String join(List<Long> roleIds) {
-        if (roleIds == null || roleIds.isEmpty()) return "";
-
-        return roleIds.stream()
-            .map(String::valueOf)
-            .collect(Collectors.joining(","));
     }
 
 }

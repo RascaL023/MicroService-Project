@@ -1,6 +1,5 @@
 package com.rascal.user_service.dto.mapper;
 
-import com.rascal.user_service.dto.request.UserRequest;
 import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.entity.Batch;
@@ -36,13 +35,15 @@ public final class UserMapper {
         );
     }
 
-    public static User toEntity(UserRequest request) {
-        User user = new User();
-        user.setName(request.name());
-        user.setEmail(request.email());
-        user.setGender(request.gender());
-
-        return user;
+    public static void toEntity(
+        User user, String name, String email, 
+        Character gender, Batch batch, String status
+    ) {
+        user.setName(name);
+        user.setEmail(email);
+        user.setGender(gender);
+        user.setBatch(batch);
+        user.setStatus(status);
     }
 
 }
