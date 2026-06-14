@@ -1,6 +1,7 @@
 package com.rascal.course_service.repository;
 
 import java.util.Optional;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,9 +20,11 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @EntityGraph(attributePaths = {"group", "group.subject"})
     Optional<Enrollment> findByIdAndDeletedAtIsNull(Long id);
-
     Optional<Enrollment> findByUserIdAndGroupIdAndDeletedAtIsNull(Long userId, Long groupId);
     Optional<Enrollment> findByUserIdAndGroupIdAndRoleAndDeletedAtIsNull(Long userId, Long groupId, CourseRoleEnum role);
+
+    @EntityGraph(attributePaths = {"group", "group.subject"})
+    List<Enrollment> findByGroupIdAndDeletedAtIsNullOrderByRoleAscUserIdAsc(Long groupId);
 
     boolean existsByUserIdAndGroupIdAndDeletedAtIsNull(Long userId, Long groupId);
     boolean existsByUserIdAndGroupIdAndRoleAndDeletedAtIsNull(Long userId, Long groupId, CourseRoleEnum role);

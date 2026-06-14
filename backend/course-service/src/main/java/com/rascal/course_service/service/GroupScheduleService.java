@@ -14,8 +14,10 @@ import com.rascal.course_service.dto.request.GroupSchedulePatchRequest;
 import com.rascal.course_service.dto.request.GroupScheduleRequest;
 import com.rascal.course_service.entity.Group;
 import com.rascal.course_service.entity.GroupSchedule;
+import com.rascal.course_service.entity.ScheduleTemplate;
 import com.rascal.course_service.repository.GroupRepository;
 import com.rascal.course_service.repository.GroupScheduleRepository;
+import com.rascal.course_service.repository.ScheduleTemplateRepository;
 
 import id.rascal.response_kit.exception.BadRequestException;
 import id.rascal.response_kit.exception.ConflictException;
@@ -27,13 +29,16 @@ public class GroupScheduleService {
 
     private final GroupScheduleRepository groupScheduleRepository;
     private final GroupRepository groupRepository;
+    private final ScheduleTemplateRepository scheduleTemplateRepository;
 
     public GroupScheduleService(
         GroupScheduleRepository groupScheduleRepository,
-        GroupRepository groupRepository
+        GroupRepository groupRepository,
+        ScheduleTemplateRepository scheduleTemplateRepository
     ) {
         this.groupScheduleRepository = groupScheduleRepository;
         this.groupRepository = groupRepository;
+        this.scheduleTemplateRepository = scheduleTemplateRepository;
     }
 
     @Transactional(readOnly = true)
@@ -53,18 +58,18 @@ public class GroupScheduleService {
 
     public GroupSchedule create(GroupScheduleRequest request) {
         Group group = getActiveGroup(request.groupId());
+        ScheduleTemplate template = getActiveTemplate(request.templateId());
         DayOfWeek dayOfWeek = normalizeDayOfWeek(request.dayOfWeek());
-        validateTimeRange(request.startTime(), request.endTime());
 
         rejectOverlappingSchedule(
             group.getId(),
             group.getSubject().getId(),
             dayOfWeek,
-            request.startTime(),
-            request.endTime()
+            template.getStartTime(),
+            template.getEndTime()
         );
 
-        GroupSchedule schedule = GroupScheduleMapper.toEntity(request, group);
+        GroupSchedule schedule = GroupScheduleMapper.toEntity(request, group, template);
         schedule.setDayOfWeek(dayOfWeek);
         schedule.setCreatedAt(LocalDateTime.now());
 
@@ -77,12 +82,13 @@ public class GroupScheduleService {
 
         GroupSchedule schedule = getById(id);
         Group group = request.groupId() == null ? schedule.getGroup() : getActiveGroup(request.groupId());
+        ScheduleTemplate template = request.templateId() == null ?
+            schedule.getScheduleTemplate() : getActiveTemplate(request.templateId());
         DayOfWeek dayOfWeek = request.dayOfWeek() == null ?
             schedule.getDayOfWeek() : normalizeDayOfWeek(request.dayOfWeek());
-        LocalTime startTime = request.startTime() == null ? schedule.getStartTime() : request.startTime();
-        LocalTime endTime = request.endTime() == null ? schedule.getEndTime() : request.endTime();
+        LocalTime startTime = template == null ? schedule.getStartTime() : template.getStartTime();
+        LocalTime endTime = template == null ? schedule.getEndTime() : template.getEndTime();
 
-        validateTimeRange(startTime, endTime);
         rejectOverlappingSchedule(
             id,
             group.getId(),
@@ -93,7 +99,12 @@ public class GroupScheduleService {
         );
 
         schedule.setDayOfWeek(dayOfWeek);
-        GroupScheduleMapper.updateEntity(schedule, request, group);
+        GroupScheduleMapper.updateEntity(
+            schedule,
+            request,
+            request.groupId() == null ? null : group,
+            request.templateId() == null ? null : template
+        );
 
         return groupScheduleRepository.save(schedule);
     }
@@ -110,9 +121,9 @@ public class GroupScheduleService {
             .orElseThrow(() -> new NotFoundException("Group not found"));
     }
 
-    private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
-        if (!startTime.isBefore(endTime))
-            throw new BadRequestException("Start time must be before end time");
+    private ScheduleTemplate getActiveTemplate(Long templateId) {
+        return scheduleTemplateRepository.findByIdAndDeletedAtIsNull(templateId)
+            .orElseThrow(() -> new NotFoundException("Schedule template not found"));
     }
 
     private void rejectOverlappingSchedule(

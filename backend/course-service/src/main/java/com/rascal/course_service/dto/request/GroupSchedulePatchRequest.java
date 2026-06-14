@@ -1,7 +1,5 @@
 package com.rascal.course_service.dto.request;
 
-import java.time.LocalTime;
-
 import jakarta.validation.constraints.Min;
 
 public record GroupSchedulePatchRequest(
@@ -10,12 +8,10 @@ public record GroupSchedulePatchRequest(
 
     String dayOfWeek,
 
-    LocalTime startTime,
-
-    LocalTime endTime
+    @Min(value = 1, message = "Invalid schedule template ID")
+    Long templateId
 ) {
     public boolean isEmptyPatch() {
-        return groupId == null && dayOfWeek == null &&
-            startTime == null && endTime == null;
+        return groupId == null && dayOfWeek == null && templateId == null;
     }
 }

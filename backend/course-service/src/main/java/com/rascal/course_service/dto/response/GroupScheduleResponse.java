@@ -8,6 +8,8 @@ public record GroupScheduleResponse(
     String groupName,
     Long subjectId,
     String subjectName,
+    Long templateId,
+    String templateName,
     String dayOfWeek,
     LocalTime startTime,
     LocalTime endTime

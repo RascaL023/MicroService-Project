@@ -12,38 +12,33 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.rascal.course_service.dto.mapper.GroupScheduleMapper;
-import com.rascal.course_service.dto.request.GroupSchedulePatchRequest;
-import com.rascal.course_service.dto.request.GroupScheduleRequest;
-import com.rascal.course_service.dto.response.GroupScheduleResponse;
-import com.rascal.course_service.service.GroupScheduleService;
+import com.rascal.course_service.dto.mapper.ScheduleTemplateMapper;
+import com.rascal.course_service.dto.request.ScheduleTemplatePatchRequest;
+import com.rascal.course_service.dto.request.ScheduleTemplateRequest;
+import com.rascal.course_service.dto.response.ScheduleTemplateResponse;
+import com.rascal.course_service.service.ScheduleTemplateService;
 
 import id.rascal.response_kit.util.ApiResponse;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/group-schedules")
-public class GroupScheduleController {
+@RequestMapping("/api/schedule-templates")
+public class ScheduleTemplateController {
 
-    private final GroupScheduleService groupScheduleService;
+    private final ScheduleTemplateService scheduleTemplateService;
 
-    public GroupScheduleController(GroupScheduleService groupScheduleService) {
-        this.groupScheduleService = groupScheduleService;
+    public ScheduleTemplateController(ScheduleTemplateService scheduleTemplateService) {
+        this.scheduleTemplateService = scheduleTemplateService;
     }
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('group-schedule.*', 'group-schedule.read')")
-    public ResponseEntity<?> getAllPaged(
-        @RequestParam(required = false) Long groupId,
-        @RequestParam(required = false) String dayOfWeek,
-        Pageable pageable
-    ) {
-        Page<GroupScheduleResponse> responses = groupScheduleService
-            .getAllPaged(groupId, dayOfWeek, pageable)
-            .map(GroupScheduleMapper::toResponse);
+    public ResponseEntity<?> getAllPaged(Pageable pageable) {
+        Page<ScheduleTemplateResponse> responses = scheduleTemplateService
+            .getAllPaged(pageable)
+            .map(ScheduleTemplateMapper::toResponse);
 
         return ApiResponse.paged(HttpStatus.OK, responses);
     }
@@ -53,16 +48,16 @@ public class GroupScheduleController {
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return ApiResponse.success(
             HttpStatus.OK,
-            GroupScheduleMapper.toResponse(groupScheduleService.getById(id))
+            ScheduleTemplateMapper.toResponse(scheduleTemplateService.getById(id))
         );
     }
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('group-schedule.*', 'group-schedule.create')")
-    public ResponseEntity<?> create(@Valid @RequestBody GroupScheduleRequest request) {
+    public ResponseEntity<?> create(@Valid @RequestBody ScheduleTemplateRequest request) {
         return ApiResponse.success(
             HttpStatus.CREATED,
-            GroupScheduleMapper.toResponse(groupScheduleService.create(request))
+            ScheduleTemplateMapper.toResponse(scheduleTemplateService.create(request))
         );
     }
 
@@ -70,18 +65,18 @@ public class GroupScheduleController {
     @PreAuthorize("hasAnyAuthority('group-schedule.*', 'group-schedule.update')")
     public ResponseEntity<?> updateById(
         @PathVariable Long id,
-        @Valid @RequestBody GroupSchedulePatchRequest request
+        @Valid @RequestBody ScheduleTemplatePatchRequest request
     ) {
         return ApiResponse.success(
             HttpStatus.OK,
-            GroupScheduleMapper.toResponse(groupScheduleService.updateById(id, request))
+            ScheduleTemplateMapper.toResponse(scheduleTemplateService.updateById(id, request))
         );
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('group-schedule.*', 'group-schedule.delete')")
     public ResponseEntity<?> deleteById(@PathVariable Long id) {
-        groupScheduleService.deleteById(id);
+        scheduleTemplateService.deleteById(id);
 
         return ResponseEntity.noContent().build();
     }

@@ -16,15 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.rascal.course_service.dto.mapper.GroupMapper;
-import com.rascal.course_service.dto.mapper.GroupScheduleMapper;
 import com.rascal.course_service.dto.request.GroupPatchRequest;
 import com.rascal.course_service.dto.request.GroupRequest;
-import com.rascal.course_service.dto.response.EnrollmentResponse;
 import com.rascal.course_service.dto.response.GroupResponse;
-import com.rascal.course_service.dto.response.GroupScheduleResponse;
 import com.rascal.course_service.entity.Group;
-import com.rascal.course_service.service.EnrollmentService;
-import com.rascal.course_service.service.GroupScheduleService;
 import com.rascal.course_service.service.GroupService;
 
 import id.rascal.response_kit.util.ApiResponse;
@@ -35,17 +30,9 @@ import jakarta.validation.Valid;
 public class GroupController {
 
     private final GroupService groupService;
-    private final EnrollmentService enrollmentService;
-    private final GroupScheduleService groupScheduleService;
 
-    public GroupController(
-        GroupService groupService,
-        EnrollmentService enrollmentService,
-        GroupScheduleService groupScheduleService
-    ) {
+    public GroupController(GroupService groupService) {
         this.groupService = groupService;
-        this.enrollmentService = enrollmentService;
-        this.groupScheduleService = groupScheduleService;
     }
 
     @GetMapping
@@ -68,32 +55,10 @@ public class GroupController {
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return ApiResponse.success(
             HttpStatus.OK,
-            groupResponse(groupService.getById(id))
+            groupService.getDetailById(id)
         );
     }
 
-    @GetMapping("/{id}/members")
-    @PreAuthorize("hasAnyAuthority('group.*', 'group.read', 'enrollment.*', 'enrollment.read')")
-    public ResponseEntity<?> getMembers(@PathVariable Long id, Pageable pageable) {
-        Page<EnrollmentResponse> responses = enrollmentService
-            .getAllPagedResponse(null, id, null, null, null, pageable);
-
-        return ApiResponse.paged(HttpStatus.OK, responses);
-    }
-
-    @GetMapping("/{id}/schedules")
-    @PreAuthorize("hasAnyAuthority('group.*', 'group.read')")
-    public ResponseEntity<?> getSchedules(
-        @PathVariable Long id,
-        @RequestParam(required = false) String dayOfWeek,
-        Pageable pageable
-    ) {
-        Page<GroupScheduleResponse> responses = groupScheduleService
-            .getAllPaged(id, dayOfWeek, pageable)
-            .map(GroupScheduleMapper::toResponse);
-
-        return ApiResponse.paged(HttpStatus.OK, responses);
-    }
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('group.*', 'group.create')")
@@ -116,6 +81,7 @@ public class GroupController {
         );
     }
 
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('group.*', 'group.delete')")
     public ResponseEntity<?> deleteById(@PathVariable Long id) {
@@ -127,4 +93,5 @@ public class GroupController {
     private GroupResponse groupResponse(Group group) {
         return GroupMapper.toResponse(group, group.getSubject());
     }
+
 }

@@ -1,9 +1,5 @@
 package com.rascal.course_service.dto.mapper;
 
-import java.time.LocalDateTime;
-
-import com.rascal.course_service.dto.request.GroupPatchRequest;
-import com.rascal.course_service.dto.request.GroupRequest;
 import com.rascal.course_service.dto.response.GroupResponse;
 import com.rascal.course_service.entity.Group;
 import com.rascal.course_service.entity.Subject;
@@ -13,10 +9,13 @@ public final class GroupMapper {
 
     private GroupMapper() { }
 
-    public static Group toEntity(GroupRequest request, Subject subject) {
-        Group group = new Group();
-        group.setName(request.name());
-        group.setAcademicYear(request.academicYear());
+    public static Group toEntity(
+        Group group, CourseStatusEnum status,
+        String name, String academicYear, Subject subject
+    ) {
+        group.setStatus(status);
+        group.setName(name);
+        group.setAcademicYear(academicYear);
         group.setSubject(subject);
 
         return group;
@@ -33,12 +32,4 @@ public final class GroupMapper {
         );
     }
 
-    public static void updateEntity(Group group, GroupPatchRequest request) {
-        if (request.name() != null) group.setName(request.name());
-        if (request.academicYear() != null) group.setAcademicYear(request.academicYear());
-        if (request.isDone() != null) 
-            group.setStatus(request.isDone() ? CourseStatusEnum.PASSED : CourseStatusEnum.ON_GOING);
-
-        group.setUpdatedAt(LocalDateTime.now());
-    }
 }

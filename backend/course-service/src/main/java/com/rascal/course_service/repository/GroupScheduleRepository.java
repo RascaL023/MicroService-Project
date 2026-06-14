@@ -2,6 +2,7 @@ package com.rascal.course_service.repository;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -15,8 +16,11 @@ import com.rascal.course_service.entity.GroupSchedule;
 
 public interface GroupScheduleRepository extends JpaRepository<GroupSchedule, Long> {
 
-    @EntityGraph(attributePaths = {"group", "group.subject"})
+    @EntityGraph(attributePaths = {"group", "group.subject", "scheduleTemplate"})
     Optional<GroupSchedule> findByIdAndDeletedAtIsNull(Long id);
+
+    @EntityGraph(attributePaths = {"group", "group.subject", "scheduleTemplate"})
+    List<GroupSchedule> findByGroupIdAndDeletedAtIsNullOrderByDayOfWeekAscStartTimeAsc(Long groupId);
 
     @Query("""
         select s
@@ -25,7 +29,7 @@ public interface GroupScheduleRepository extends JpaRepository<GroupSchedule, Lo
             and (:groupId is null or s.group.id = :groupId)
             and (:dayOfWeek is null or s.dayOfWeek = :dayOfWeek)
     """)
-    @EntityGraph(attributePaths = {"group", "group.subject"})
+    @EntityGraph(attributePaths = {"group", "group.subject", "scheduleTemplate"})
     Page<GroupSchedule> searchActiveSchedules(
         @Param("groupId") Long groupId,
         @Param("dayOfWeek") DayOfWeek dayOfWeek,

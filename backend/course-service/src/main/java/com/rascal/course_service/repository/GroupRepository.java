@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,16 +13,16 @@ import com.rascal.course_service.entity.Group;
 
 public interface GroupRepository extends JpaRepository<Group, Long> {
 
-    Page<Group> findByDeletedAtIsNull(Pageable pageable);
+    @EntityGraph(attributePaths = "subject")
     Optional<Group> findByIdAndDeletedAtIsNull(Long id);
 
-    boolean existsBySubject_IdAndAcademicYearAndNameIgnoreCaseAndDeletedAtIsNull(
+    boolean existsBySubjectIdAndAcademicYearAndNameIgnoreCaseAndDeletedAtIsNull(
         Long subjectId,
         String academicYear,
         String name
     );
 
-    boolean existsBySubject_IdAndAcademicYearAndNameIgnoreCaseAndIdNotAndDeletedAtIsNull(
+    boolean existsBySubjectIdAndAcademicYearAndNameIgnoreCaseAndIdNotAndDeletedAtIsNull(
         Long subjectId,
         String academicYear,
         String name,
@@ -36,6 +37,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
         AND (:subjectId IS NULL OR g.subject.id = :subjectId)
         AND (:academicYear IS NULL OR g.academicYear = :academicYear)
         """)
+    @EntityGraph(attributePaths = "subject")
     Page<Group> searchActiveGroups(
         @Param("name") String name,
         @Param("subjectId") Long subjectId,
