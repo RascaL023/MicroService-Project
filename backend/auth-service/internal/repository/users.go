@@ -15,6 +15,7 @@ const (
 	AccountPendingActivation = "PENDING_ACTIVATION"
 	AccountActive            = "ACTIVE"
 	AccountBanned            = "BANNED"
+	DefaultUserRole          = "USER"
 )
 
 var ErrDuplicate = errors.New("duplicate record")
@@ -74,24 +75,18 @@ func (r *UserRepository) CreateBootstrapAdmin(ctx context.Context, id int64, ema
 
 func (r *UserRepository) Provision(ctx context.Context, userID int64, email string, roleIDs []int64, upstreamStatus string) (entity.User, error) {
 	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return entity.User{}, err
-	}
+	if err != nil { return entity.User{}, err }
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	status := AccountPendingActivation
-	if upstreamStatus == AccountBanned {
-		status = AccountBanned
-	}
+	if upstreamStatus == AccountBanned { status = AccountBanned }
 
 	_, err = tx.Exec(ctx, `
 		UPDATE users
 		SET deleted_at=now(), updated_at=now()
 		WHERE email=$1 AND id<>$2 AND deleted_at IS NULL
 	`, email, userID)
-	if err != nil {
-		return entity.User{}, err
-	}
+	if err != nil { return entity.User{}, err }
 
 	var user entity.User
 	err = tx.QueryRow(ctx, `
@@ -118,12 +113,9 @@ func (r *UserRepository) Provision(ctx context.Context, userID int64, email stri
 		&user.DeletedAt,
 	)
 	if err != nil {
-		if isDuplicate(err) {
-			return entity.User{}, ErrDuplicate
-		}
+		if isDuplicate(err) { return entity.User{}, ErrDuplicate }
 		return entity.User{}, err
 	}
-
 	if err := replaceRoles(ctx, tx, userID, roleIDs); err != nil {
 		return entity.User{}, err
 	}
@@ -133,6 +125,13 @@ func (r *UserRepository) Provision(ctx context.Context, userID int64, email stri
 
 	user.Roles, err = r.rolesForUser(ctx, user.ID)
 	return user, err
+}
+
+func (r *UserRepository) ProvisionDefaultUser(ctx context.Context, userID int64, email string) (entity.User, error) {
+	roleID, err := r.roleIDByName(ctx, DefaultUserRole)
+	if err != nil { return entity.User{}, err }
+
+	return r.Provision(ctx, userID, email, []int64{roleID}, AccountActive)
 }
 
 func (r *UserRepository) UpdateEmail(ctx context.Context, userID int64, email string) (entity.User, error) {
@@ -149,23 +148,6 @@ func (r *UserRepository) UpdateEmail(ctx context.Context, userID int64, email st
 		return entity.User{}, err
 	}
 	return user, nil
-}
-
-func (r *UserRepository) SyncRoles(ctx context.Context, userID int64, roleIDs []int64) (entity.User, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return entity.User{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if err := replaceRoles(ctx, tx, userID, roleIDs); err != nil {
-		return entity.User{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return entity.User{}, err
-	}
-
-	return r.FindByID(ctx, userID)
 }
 
 func (r *UserRepository) MarkDeleted(ctx context.Context, id int64) error {
@@ -313,6 +295,23 @@ func (r *UserRepository) rolesForUser(ctx context.Context, userID int64) ([]enti
 	}
 
 	return roles, rows.Err()
+}
+
+func (r *UserRepository) roleIDByName(ctx context.Context, name string) (int64, error) {
+	var id int64
+	err := r.pool.QueryRow(ctx, `
+		SELECT id
+		FROM roles
+		WHERE name=$1 AND deleted_at IS NULL
+	`, name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
 func (r *UserRepository) authoritiesForRole(ctx context.Context, roleID int64) ([]entity.Authority, error) {

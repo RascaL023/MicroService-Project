@@ -15,6 +15,8 @@
         - subject material
 
 # TODO:
+    - auth-service:
+        - fix SSOT user account, role of new user = USER, no ban
     - user-service: 
         - bulk add via file
     - course-service: 

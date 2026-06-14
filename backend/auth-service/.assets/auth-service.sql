@@ -150,3 +150,11 @@ FROM authorities_roles ar
     JOIN roles r ON r.id = ar.role_id
     JOIN authorities a ON a.id = ar.authority_id
 GROUP BY r.id ORDER BY r.id;
+
+SELECT 
+    u.email AS user_email,
+    string_agg(r.name, ', ') AS roles
+FROM users_roles ur
+    JOIN roles r ON r.id = ur.role_id
+    JOIN users u ON u.id = ur.user_id
+GROUP BY u.id ORDER BY u.id;

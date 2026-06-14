@@ -28,7 +28,9 @@ func main() {
 	redisClient, err := db.ConnectRedis(ctx, cfg.RedisAddr, cfg.RedisPass, cfg.RedisDB)
 	if err != nil { log.Fatalf("Connect redis: %v", err) }
 	defer func() {
-		if err := redisClient.Close(); err != nil { log.Printf("close redis: %v", err) }
+		if err := redisClient.Close(); err != nil {
+			log.Printf("close redis: %v", err)
+		}
 	}()
 
 	repos := repository.NewPostgres(db_pool)
@@ -37,8 +39,7 @@ func main() {
 
 	emailJobPublisher := repository.NewEmailJobPublisher(redisClient, cfg.NotificationEmailStream)
 
-	userSvc := service.NewUserService(repos.Users, repos.Roles)
-	roleSvc := service.NewRoleService(repos.Roles)
+	userSvc := service.NewUserService(repos.Users)
 	authSvc := service.NewAuthService(
 		cfg,
 		repos.Users,
@@ -47,17 +48,18 @@ func main() {
 		emailJobPublisher,
 	)
 
-	if err := service.SeedAdmin(ctx, cfg, repos.Users, repos.Roles);
+	if err := service.SeedAdmin(ctx, cfg, repos.Users, repos.Roles); 
 		err != nil { log.Fatalf("seed admin: %v", err) }
 
 	userEventConsumer := service.NewUserEventConsumer(
-		redisClient, 
-		cfg.UserEventsStream, 
-		"auth-service", "auth-service-1", 
+		redisClient,
+		cfg.UserEventsStream,
+		"auth-service", "auth-service-1",
 		repos.Users, sessionRepo,
-	); go userEventConsumer.Run(ctx)
+	)
+	go userEventConsumer.Run(ctx)
 
-	router := apphttp.NewRouter(cfg, authSvc, userSvc, roleSvc)
+	router := apphttp.NewRouter(cfg, authSvc, userSvc)
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           router,

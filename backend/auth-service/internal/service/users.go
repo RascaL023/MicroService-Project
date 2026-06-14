@@ -2,9 +2,7 @@ package service
 
 import (
 	"context"
-	"strings"
 
-	"auth-service/internal/dto/request"
 	"auth-service/internal/dto/response"
 	"auth-service/internal/mapper"
 	"auth-service/internal/repository"
@@ -12,50 +10,10 @@ import (
 
 type UserService struct {
 	userRepo *repository.UserRepository
-	roleRepo *repository.RoleRepository
 }
 
-func NewUserService(users *repository.UserRepository, roles *repository.RoleRepository) *UserService {
-	return &UserService{userRepo: users, roleRepo: roles}
-}
-
-func (s *UserService) Create(ctx context.Context, req request.UserRequest) (response.UserResponse, error) {
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	if req.UserID == 0 || email == "" || len(req.RoleIDs) == 0 {
-		fields := make([]FieldError, 0, 3)
-		if req.UserID == 0 {
-			fields = append(fields, FieldError{
-				Field:   "userId",
-				Message: "User ID is required",
-			})
-		}
-
-		if email == "" {
-			fields = append(fields, FieldError{
-				Field:   "email",
-				Message: "Email is required",
-			})
-		}
-
-		if len(req.RoleIDs) == 0 {
-			fields = append(fields, FieldError{
-				Field:   "roleIds",
-				Message: "Role is required",
-			})
-		}
-		return response.UserResponse{}, NewValidationError(fields...)
-	}
-
-	if _, err := s.roleRepo.FindByIDs(ctx, req.RoleIDs); err != nil {
-		return response.UserResponse{}, err
-	}
-
-	user, err := s.userRepo.Provision(ctx, req.UserID, email, req.RoleIDs, repository.AccountActive)
-	if err != nil {
-		return response.UserResponse{}, err
-	}
-
-	return mapper.ToUserResponse(user), nil
+func NewUserService(users *repository.UserRepository) *UserService {
+	return &UserService{userRepo: users}
 }
 
 func (s *UserService) GetByID(ctx context.Context, id int64) (response.UserResponse, error) {

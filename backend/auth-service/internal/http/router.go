@@ -30,11 +30,10 @@ type Server struct {
 	cfg     config.Config
 	authSvc *service.AuthService
 	userSvc *service.UserService
-	roleSvc *service.RoleService
 }
 
-func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service.UserService, roleSvc *service.RoleService) http.Handler {
-	server := &Server{cfg: cfg, authSvc: authSvc, userSvc: userSvc, roleSvc: roleSvc}
+func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service.UserService) http.Handler {
+	server := &Server{cfg: cfg, authSvc: authSvc, userSvc: userSvc}
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
@@ -46,10 +45,9 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 	})
 
 	router.Route("/api/auths/users", func(r chi.Router) {
-		r.With(server.requireAnyAuthority("user.create", "user.*")).Post("/", server.createUser)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/", server.listUsers)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/{id}", server.getUserByID)
-		// r.With(server.requireAuthority("user.*")).Patch("/{id}/status", server.updateUserStatus)
+		r.With(server.requireAnyAuthority("user.update", "user.*")).Patch("/{id}/status", server.updateUserStatus)
 	})
 
 	router.Route("/api/auths", func(r chi.Router) {
@@ -91,14 +89,6 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, "Logout successful", nil, err)
 }
 
-func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
-	var req request.UserRequest
-	if !decode(w, r, &req) { return }
-
-	userResponse, err := s.userSvc.Create(r.Context(), req)
-	respond(w, http.StatusCreated, "User created successfully", userResponse, err)
-}
-
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	page, size := pagination(r)
 	users, total, err := s.userSvc.List(r.Context(), page, size)
@@ -122,6 +112,17 @@ func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 
 	userResponse, err := s.userSvc.GetByID(r.Context(), id)
 	respond(w, http.StatusOK, "User retrieved successfully", userResponse, err)
+}
+
+func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok { return }
+
+	var req request.UserStatusRequest
+	if !decode(w, r, &req) { return }
+
+	userResponse, err := s.authSvc.UpdateUserStatus(r.Context(), id, req)
+	respond(w, http.StatusOK, "User status updated successfully", userResponse, err)
 }
 
 func decode(w http.ResponseWriter, r *http.Request, target any) bool {
