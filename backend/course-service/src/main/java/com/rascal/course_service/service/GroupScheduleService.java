@@ -86,16 +86,14 @@ public class GroupScheduleService {
             schedule.getScheduleTemplate() : getActiveTemplate(request.templateId());
         DayOfWeek dayOfWeek = request.dayOfWeek() == null ?
             schedule.getDayOfWeek() : normalizeDayOfWeek(request.dayOfWeek());
-        LocalTime startTime = template == null ? schedule.getStartTime() : template.getStartTime();
-        LocalTime endTime = template == null ? schedule.getEndTime() : template.getEndTime();
 
         rejectOverlappingSchedule(
             id,
             group.getId(),
             group.getSubject().getId(),
             dayOfWeek,
-            startTime,
-            endTime
+            template.getStartTime(),
+            template.getEndTime()
         );
 
         schedule.setDayOfWeek(dayOfWeek);

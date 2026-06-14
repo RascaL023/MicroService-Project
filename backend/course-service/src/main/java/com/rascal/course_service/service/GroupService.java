@@ -11,8 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.rascal.course_service.dto.mapper.GroupMapper;
 import com.rascal.course_service.dto.mapper.GroupScheduleMapper;
+import com.rascal.course_service.dto.request.GroupCompleteRequest;
 import com.rascal.course_service.dto.request.GroupPatchRequest;
 import com.rascal.course_service.dto.request.GroupRequest;
+import com.rascal.course_service.dto.response.GroupCompleteResponse;
 import com.rascal.course_service.dto.response.GroupDetailResponse;
 import com.rascal.course_service.dto.response.GroupMemberResponse;
 import com.rascal.course_service.dto.response.GroupResponse;
@@ -65,7 +67,7 @@ public class GroupService {
     public GroupDetailResponse getDetailById(Long id) {
         Group group = getById(id);
         List<GroupScheduleResponse> schedules = groupScheduleRepository
-            .findByGroupIdAndDeletedAtIsNullOrderByDayOfWeekAscStartTimeAsc(id)
+            .findActiveByGroupIdOrderByDayAndTemplateStartTime(id)
             .stream().map(GroupScheduleMapper::toResponse)
             .toList();
 
@@ -92,12 +94,14 @@ public class GroupService {
         String name,
         Long subjectId,
         String academicYear,
+        String status,
         Pageable pageable
     ) {
         return groupRepository.searchActiveGroups(
             normalizeSearchName(name),
             subjectId,
             normalizeSearchAcademicYear(academicYear),
+            normalizeSearchStatus(status),
             pageable
         );
     }
@@ -157,6 +161,30 @@ public class GroupService {
     }
 
 
+    public GroupCompleteResponse completeBySubjectAndAcademicYear(GroupCompleteRequest request) {
+        Subject subject = getActiveSubject(request.subjectId());
+        String academicYear = normalizeAcademicYear(request.academicYear());
+        LocalDateTime now = LocalDateTime.now();
+
+        List<Long> groupIds = groupRepository.findActiveOngoingIdsBySubjectIdAndAcademicYear(
+            subject.getId(),
+            academicYear
+        );
+        if (groupIds.isEmpty())
+            return new GroupCompleteResponse(subject.getId(), academicYear, 0, 0);
+
+        int deletedSchedules = groupScheduleRepository.deleteByGroupIdIn(groupIds);
+        int completedGroups = groupRepository.markPassedByIds(groupIds, now);
+
+        return new GroupCompleteResponse(
+            subject.getId(),
+            academicYear,
+            completedGroups,
+            deletedSchedules
+        );
+    }
+
+
     private Subject getActiveSubject(Long subjectId) {
         return subjectRepository.findByIdAndDeletedAtIsNull(subjectId)
             .orElseThrow(() -> new NotFoundException("Subject not found"));
@@ -206,6 +234,16 @@ public class GroupService {
             return null;
 
         return academicYear.trim();
+    }
+
+    private CourseStatusEnum normalizeSearchStatus(String status) {
+        if (status == null || status.isBlank())
+            return null;
+
+        try { return CourseStatusEnum.from(status.trim()); }
+        catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Invalid group status");
+        }
     }
 
 }

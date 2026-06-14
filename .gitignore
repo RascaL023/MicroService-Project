@@ -47,3 +47,4 @@ frontend
 backend/course-service/uploads/
 redis_data
 **/test/**
+http-client.env.json

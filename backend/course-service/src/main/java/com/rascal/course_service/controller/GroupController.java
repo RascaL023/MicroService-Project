@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.rascal.course_service.dto.mapper.GroupMapper;
+import com.rascal.course_service.dto.request.GroupCompleteRequest;
 import com.rascal.course_service.dto.request.GroupPatchRequest;
 import com.rascal.course_service.dto.request.GroupRequest;
 import com.rascal.course_service.dto.response.GroupResponse;
@@ -41,10 +42,11 @@ public class GroupController {
         @RequestParam(required = false) String name,
         @RequestParam(required = false) Long subjectId,
         @RequestParam(required = false) String academicYear,
+        @RequestParam(required = false) String status,
         Pageable pageable
     ) {
         Page<GroupResponse> responses = groupService
-            .getAllPaged(name, subjectId, academicYear, pageable)
+            .getAllPaged(name, subjectId, academicYear, status, pageable)
             .map(this::groupResponse);
 
         return ApiResponse.paged(HttpStatus.OK, responses);
@@ -66,6 +68,17 @@ public class GroupController {
         return ApiResponse.success(
             HttpStatus.CREATED,
             groupResponse(groupService.create(request))
+        );
+    }
+
+    @PatchMapping("/complete")
+    @PreAuthorize("hasAnyAuthority('group.*', 'group.update')")
+    public ResponseEntity<?> completeBySubjectAndAcademicYear(
+        @Valid @RequestBody GroupCompleteRequest request
+    ) {
+        return ApiResponse.success(
+            HttpStatus.OK,
+            groupService.completeBySubjectAndAcademicYear(request)
         );
     }
 

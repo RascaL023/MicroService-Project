@@ -16,7 +16,7 @@ public final class GroupScheduleMapper {
     public static GroupSchedule toEntity(GroupScheduleRequest request, Group group, ScheduleTemplate template) {
         GroupSchedule schedule = new GroupSchedule();
         schedule.setGroup(group);
-        applyTemplate(schedule, template);
+        schedule.setScheduleTemplate(template);
 
         return schedule;
     }
@@ -34,8 +34,8 @@ public final class GroupScheduleMapper {
             template == null ? null : template.getId(),
             template == null ? null : template.getName(),
             schedule.getDayOfWeek().name(),
-            schedule.getStartTime(),
-            schedule.getEndTime()
+            template == null ? null : template.getStartTime(),
+            template == null ? null : template.getEndTime()
         );
     }
 
@@ -46,14 +46,8 @@ public final class GroupScheduleMapper {
         ScheduleTemplate template
     ) {
         if (group != null) schedule.setGroup(group);
-        if (template != null) applyTemplate(schedule, template);
+        if (template != null) schedule.setScheduleTemplate(template);
 
         schedule.setUpdatedAt(LocalDateTime.now());
-    }
-
-    private static void applyTemplate(GroupSchedule schedule, ScheduleTemplate template) {
-        schedule.setScheduleTemplate(template);
-        schedule.setStartTime(template.getStartTime());
-        schedule.setEndTime(template.getEndTime());
     }
 }
