@@ -6,7 +6,9 @@ import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.entity.User;
 
-public class UserMapper {
+public final class UserMapper {
+
+    private UserMapper() {}
 
     public static UserResponse toResponse(User user) {
         Batch batch = user.getBatch();

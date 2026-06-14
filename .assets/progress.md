@@ -1,7 +1,4 @@
 # PENDING:
-    - user-service: 
-        - bulk add via file
-        - sanitizing inputs
     - course-service: 
         - weekly report
         - grade and or rank system
@@ -18,6 +15,8 @@
         - subject material
 
 # TODO:
+    - user-service: 
+        - bulk add via file
     - course-service: 
         - meeting system
         - assignment and quiz

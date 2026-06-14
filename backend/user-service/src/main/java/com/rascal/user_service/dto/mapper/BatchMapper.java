@@ -4,7 +4,9 @@ import com.rascal.user_service.dto.request.BatchRequest;
 import com.rascal.user_service.dto.response.BatchResponse;
 import com.rascal.user_service.entity.Batch;
 
-public class BatchMapper {
+public final class BatchMapper {
+
+    private BatchMapper() {}
 
     public static BatchResponse toResponse(Batch batch, long userCount) {
         return new BatchResponse(
