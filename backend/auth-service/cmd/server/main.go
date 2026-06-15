@@ -40,6 +40,7 @@ func main() {
 	repos := repository.NewPostgres(db_pool)
 	sessionRepo := repository.NewSessionRepository(redisClient, cfg.RedisPrefix, cfg.RedisBanPrefix)
 	activationRepo := repository.NewActivationRepository(redisClient)
+	passwordResetRepo := repository.NewPasswordResetRepository(redisClient, cfg.RedisPasswordResetPrefix)
 
 	emailJobPublisher := repository.NewEmailJobPublisher(redisClient, cfg.NotificationEmailStream)
 
@@ -49,6 +50,7 @@ func main() {
 		repos.Users,
 		sessionRepo,
 		activationRepo,
+		passwordResetRepo,
 		emailJobPublisher,
 	)
 

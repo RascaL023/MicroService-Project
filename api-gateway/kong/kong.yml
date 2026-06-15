@@ -5,7 +5,7 @@ services:
   - name: auth-service
     url: http://localhost:8081
     routes:
-      - name: auth-public-route
+      - name: auth-route
         paths:
           - /api/auths
         strip_path: false
@@ -13,7 +13,7 @@ services:
   - name: user-service
     url: http://localhost:8082
     routes:
-      - name: user-public-route
+      - name: user-protected-route
         paths:
           - /api/users
           - /api/batches
@@ -29,7 +29,7 @@ services:
   - name: course-service
     url: http://localhost:8084
     routes:
-      - name: course-public-route
+      - name: course-protected-route
         paths:
           - /api/subjects
           - /api/groups

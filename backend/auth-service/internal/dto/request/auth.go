@@ -13,3 +13,12 @@ type ActivationCompleteRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
 }
+
+type PasswordResetRequest struct {
+	Email string `json:"email"`
+}
+
+type PasswordResetCompleteRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}

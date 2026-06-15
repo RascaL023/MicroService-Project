@@ -32,6 +32,7 @@ redis:
   prefixes: 
     session: "session:"
     ban: "banned:users"
+    password_reset: "password-reset:"
   streams:
     user_events: "user:events"
     notification_emails: "notification:emails"
@@ -44,6 +45,8 @@ auth:
   session_ttl_hours: 24
   activation_ttl_minutes: 30
   activation_url: "https://dev.rascal.my.id/activate"
+  password_reset_ttl_minutes: 30
+  password_reset_url: "https://dev.rascal.my.id/reset-password"
 
 notification:
   email:

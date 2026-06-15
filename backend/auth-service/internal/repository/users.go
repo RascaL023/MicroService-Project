@@ -187,6 +187,15 @@ func (r *UserRepository) SetActivatedPassword(ctx context.Context, id int64, has
 	`, id, hashPassword, AccountActive)
 }
 
+func (r *UserRepository) SetPassword(ctx context.Context, id int64, hashPassword string) (entity.User, error) {
+	return r.findOneReturning(ctx, `
+		UPDATE users
+		SET hash_password=$2, updated_at=now()
+		WHERE id=$1 AND status=$3 AND deleted_at IS NULL
+		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+	`, id, hashPassword, AccountActive)
+}
+
 func (r *UserRepository) SetStatus(ctx context.Context, id int64, status string) (entity.User, error) {
 	user, err := r.findOneReturning(ctx, `
 		UPDATE users

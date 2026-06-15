@@ -13,18 +13,21 @@ import (
 )
 
 type Config struct {
-	Port                    string
-	DatabaseURL             string
-	SessionTTL              time.Duration
-	ActivationTTL           time.Duration
-	ActivationURL           string
-	RedisAddr               string
-	RedisPass               string
-	RedisDB                 int
-	RedisPrefix             string
-	RedisBanPrefix          string
-	UserEventsStream        string
-	NotificationEmailStream string
+	Port                     string
+	DatabaseURL              string
+	SessionTTL               time.Duration
+	ActivationTTL            time.Duration
+	ActivationURL            string
+	PasswordResetTTL         time.Duration
+	PasswordResetURL         string
+	RedisAddr                string
+	RedisPass                string
+	RedisDB                  int
+	RedisPrefix              string
+	RedisBanPrefix           string
+	RedisPasswordResetPrefix string
+	UserEventsStream         string
+	NotificationEmailStream  string
 
 	AdminEmail    string
 	AdminPassword string
@@ -70,8 +73,9 @@ type redisConfig struct {
 }
 
 type redisPrefixesConfig struct {
-	Session string `mapstructure:"session"`
-	Banned  string `mapstructure:"ban"`
+	Session       string `mapstructure:"session"`
+	Banned        string `mapstructure:"ban"`
+	PasswordReset string `mapstructure:"password_reset"`
 }
 
 type redisStreamsConfig struct {
@@ -80,9 +84,11 @@ type redisStreamsConfig struct {
 }
 
 type authConfig struct {
-	SessionTTLHours      int    `mapstructure:"session_ttl_hours"`
-	ActivationTTLMinutes int    `mapstructure:"activation_ttl_minutes"`
-	ActivationURL        string `mapstructure:"activation_url"`
+	SessionTTLHours         int    `mapstructure:"session_ttl_hours"`
+	ActivationTTLMinutes    int    `mapstructure:"activation_ttl_minutes"`
+	ActivationURL           string `mapstructure:"activation_url"`
+	PasswordResetTTLMinutes int    `mapstructure:"password_reset_ttl_minutes"`
+	PasswordResetURL        string `mapstructure:"password_reset_url"`
 }
 
 type adminConfig struct {
@@ -97,28 +103,29 @@ func Load() Config {
 	}
 
 	return Config{
-		Port:                    strconv.Itoa(raw.Services.Auth.Port),
-		DatabaseURL:             databaseURL(raw.Database),
-		SessionTTL:              time.Duration(raw.Auth.SessionTTLHours) * time.Hour,
-		ActivationTTL:           time.Duration(raw.Auth.ActivationTTLMinutes) * time.Minute,
-		ActivationURL:           raw.Auth.ActivationURL,
-		RedisAddr:               net.JoinHostPort(raw.Redis.Host, strconv.Itoa(raw.Redis.Port)),
-		RedisPass:               raw.Redis.Password,
-		RedisDB:                 raw.Redis.DB,
-		RedisPrefix:             raw.Redis.Prefixes.Session,
-		RedisBanPrefix:          raw.Redis.Prefixes.Banned,
-		UserEventsStream:        raw.Redis.Streams.UserEvents,
-		NotificationEmailStream: raw.Redis.Streams.NotificationEmail,
-		AdminEmail:              raw.Admin.Email,
-		AdminPassword:           raw.Admin.Password,
+		Port:                     strconv.Itoa(raw.Services.Auth.Port),
+		DatabaseURL:              databaseURL(raw.Database),
+		SessionTTL:               time.Duration(raw.Auth.SessionTTLHours) * time.Hour,
+		ActivationTTL:            time.Duration(raw.Auth.ActivationTTLMinutes) * time.Minute,
+		ActivationURL:            raw.Auth.ActivationURL,
+		PasswordResetTTL:         time.Duration(raw.Auth.PasswordResetTTLMinutes) * time.Minute,
+		PasswordResetURL:         raw.Auth.PasswordResetURL,
+		RedisAddr:                net.JoinHostPort(raw.Redis.Host, strconv.Itoa(raw.Redis.Port)),
+		RedisPass:                raw.Redis.Password,
+		RedisDB:                  raw.Redis.DB,
+		RedisPrefix:              raw.Redis.Prefixes.Session,
+		RedisBanPrefix:           raw.Redis.Prefixes.Banned,
+		RedisPasswordResetPrefix: raw.Redis.Prefixes.PasswordReset,
+		UserEventsStream:         raw.Redis.Streams.UserEvents,
+		NotificationEmailStream:  raw.Redis.Streams.NotificationEmail,
+		AdminEmail:               raw.Admin.Email,
+		AdminPassword:            raw.Admin.Password,
 	}
 }
 
 func loadGlobalConfig(target any) error {
 	dir, err := globalConfigDir()
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 
 	v := viper.New()
 	v.SetConfigType("yaml")

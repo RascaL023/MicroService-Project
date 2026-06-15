@@ -70,13 +70,24 @@ public class EmailJobConsumer {
 
     private void handle(Map<Object, Object> payload) throws Exception {
         String type = string(payload.get("type"));
-        if (!"ACTIVATION_EMAIL".equals(type)) return;
+        String to = string(payload.get("to"));
 
-        log.info("Sending activation email job to {}", string(payload.get("to")));
-        emailSender.sendActivationEmail(
-            string(payload.get("to")),
-            string(payload.get("activationUrl"))
-        );
+        if ("ACTIVATION_EMAIL".equals(type)) {
+            log.info("Sending activation email job to {}", to);
+            emailSender.sendActivationEmail(
+                to,
+                string(payload.get("activationUrl"))
+            );
+            return;
+        }
+
+        if ("PASSWORD_RESET_EMAIL".equals(type)) {
+            log.info("Sending password reset email job to {}", to);
+            emailSender.sendPasswordResetEmail(
+                to,
+                string(payload.get("resetUrl"))
+            );
+        }
     }
 
     private void ackAndDelete(MapRecord<String, Object, Object> record) {

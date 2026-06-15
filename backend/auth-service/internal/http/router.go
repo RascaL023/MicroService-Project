@@ -55,6 +55,8 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 	router.Route("/api/auths", func(r chi.Router) {
 		r.Post("/activations/request", server.requestActivation)
 		r.Post("/activations/complete", server.completeActivation)
+		r.Post("/passwords/forgot", server.requestPasswordReset)
+		r.Post("/passwords/reset", server.completePasswordReset)
 		r.Post("/login", server.login)
 		r.Post("/logout", server.logout)
 	})
@@ -64,7 +66,9 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var req request.LoginRequest
-	if !decode(w, r, &req) { return }
+	if !decode(w, r, &req) {
+		return
+	}
 	loginResponse, err := s.authSvc.Login(r.Context(), req)
 
 	respond(w, http.StatusOK, "Login successful", loginResponse, err)
@@ -72,7 +76,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) requestActivation(w http.ResponseWriter, r *http.Request) {
 	var req request.ActivationRequest
-	if !decode(w, r, &req) { return }
+	if !decode(w, r, &req) {
+		return
+	}
 
 	err := s.authSvc.RequestActivation(r.Context(), req)
 	respond(w, http.StatusOK, "If the email is valid, activation instructions have been sent", nil, err)
@@ -80,10 +86,32 @@ func (s *Server) requestActivation(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) completeActivation(w http.ResponseWriter, r *http.Request) {
 	var req request.ActivationCompleteRequest
-	if !decode(w, r, &req) { return }
+	if !decode(w, r, &req) {
+		return
+	}
 
 	loginResponse, err := s.authSvc.CompleteActivation(r.Context(), req)
 	respond(w, http.StatusOK, "Account activated successfully", loginResponse, err)
+}
+
+func (s *Server) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var req request.PasswordResetRequest
+	if !decode(w, r, &req) {
+		return
+	}
+
+	err := s.authSvc.RequestPasswordReset(r.Context(), req)
+	respond(w, http.StatusOK, "If the email is valid, password reset instructions have been sent", nil, err)
+}
+
+func (s *Server) completePasswordReset(w http.ResponseWriter, r *http.Request) {
+	var req request.PasswordResetCompleteRequest
+	if !decode(w, r, &req) {
+		return
+	}
+
+	err := s.authSvc.CompletePasswordReset(r.Context(), req)
+	respond(w, http.StatusOK, "Password reset successfully", nil, err)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +132,9 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok { return }
+	if !ok {
+		return
+	}
 
 	auth, _ := r.Context().Value(authContextKey).(authContext)
 	if auth.User.ID != id && !auth.Authorities["user.*"] {
@@ -118,10 +148,14 @@ func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok { return }
+	if !ok {
+		return
+	}
 
 	var req request.UserStatusRequest
-	if !decode(w, r, &req) { return }
+	if !decode(w, r, &req) {
+		return
+	}
 
 	userResponse, err := s.authSvc.UpdateUserStatus(r.Context(), id, req)
 	respond(w, http.StatusOK, "User status updated successfully", userResponse, err)
@@ -129,10 +163,14 @@ func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) setUserRole(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok { return }
+	if !ok {
+		return
+	}
 
 	var req request.UserRoleRequest
-	if !decode(w, r, &req) { return }
+	if !decode(w, r, &req) {
+		return
+	}
 
 	userResponse, err := s.userSvc.SetManagedRole(r.Context(), id, req)
 	respond(w, http.StatusOK, "User role updated successfully", userResponse, err)
@@ -140,7 +178,9 @@ func (s *Server) setUserRole(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) demoteUserRole(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
-	if !ok { return }
+	if !ok {
+		return
+	}
 
 	userResponse, err := s.userSvc.DemoteToDefaultRole(r.Context(), id)
 	respond(w, http.StatusOK, "User role demoted successfully", userResponse, err)
@@ -190,9 +230,15 @@ func respond(w http.ResponseWriter, status int, message string, data any, err er
 func pagination(r *http.Request) (int, int) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
-	if page <= 0 { page = 1 }
-	if size <= 0 { size = 10 }
-	if size > 100 { size = 100 }
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10
+	}
+	if size > 100 {
+		size = 100
+	}
 
 	return page, size
 }

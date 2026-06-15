@@ -32,3 +32,20 @@ func (p *EmailJobPublisher) PublishActivation(ctx context.Context, to, activatio
 	log.Printf("activation email job queued stream=%s id=%s to=%s", p.stream, id, to)
 	return nil
 }
+
+func (p *EmailJobPublisher) PublishPasswordReset(ctx context.Context, to, resetURL string) error {
+	id, err := p.client.XAdd(ctx, &redis.XAddArgs{
+		Stream: p.stream,
+		Values: map[string]any{
+			"type":     "PASSWORD_RESET_EMAIL",
+			"to":       to,
+			"resetUrl": resetURL,
+		},
+	}).Result()
+	if err != nil {
+		return err
+	}
+
+	log.Printf("password reset email job queued stream=%s id=%s to=%s", p.stream, id, to)
+	return nil
+}

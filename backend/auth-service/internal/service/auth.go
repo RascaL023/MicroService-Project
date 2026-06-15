@@ -26,6 +26,7 @@ type AuthService struct {
 	users       *repository.UserRepository
 	sessions    *repository.SessionRepository
 	activations *repository.ActivationRepository
+	resets      *repository.PasswordResetRepository
 	emailJobs   *repository.EmailJobPublisher
 }
 
@@ -34,6 +35,7 @@ func NewAuthService(
 	users *repository.UserRepository,
 	sessions *repository.SessionRepository,
 	activations *repository.ActivationRepository,
+	resets *repository.PasswordResetRepository,
 	emailJobs *repository.EmailJobPublisher,
 ) *AuthService {
 	return &AuthService{
@@ -41,6 +43,7 @@ func NewAuthService(
 		users:       users,
 		sessions:    sessions,
 		activations: activations,
+		resets:      resets,
 		emailJobs:   emailJobs,
 	}
 }
@@ -87,14 +90,18 @@ func (s *AuthService) RequestActivation(ctx context.Context, req request.Activat
 		log.Printf("activation request ignored: auth identity not found for email=%s", email)
 		return err
 	}
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	if user.Status != repository.AccountPendingActivation {
 		log.Printf("activation request ignored: userID=%d email=%s status=%s", user.ID, user.Email, user.Status)
 		return ErrConflict
 	}
 
 	token, err := generateRandomToken()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	if err := s.activations.Create(ctx, tokenHash(token), user.ID, s.cfg.ActivationTTL); err != nil {
 		return err
 	}
@@ -140,9 +147,78 @@ func (s *AuthService) CompleteActivation(ctx context.Context, req request.Activa
 	return s.createSession(ctx, user)
 }
 
+func (s *AuthService) RequestPasswordReset(ctx context.Context, req request.PasswordResetRequest) error {
+	email := normalizeEmail(req.Email)
+	if email == "" {
+		return NewValidationError(FieldError{Field: "email", Message: "Email is required"})
+	}
+
+	user, err := s.users.FindByEmail(ctx, email)
+	if errors.Is(err, repository.ErrNotFound) {
+		log.Printf("password reset request ignored: auth identity not found for email=%s", email)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if user.Status != repository.AccountActive || user.HashPassword == nil {
+		log.Printf("password reset request ignored: userID=%d email=%s status=%s", user.ID, user.Email, user.Status)
+		return nil
+	}
+
+	token, err := generateRandomToken()
+	if err != nil {
+		return err
+	}
+	if err := s.resets.Create(ctx, tokenHash(token), user.ID, s.cfg.PasswordResetTTL); err != nil {
+		return err
+	}
+
+	if err := s.emailJobs.PublishPasswordReset(ctx, user.Email, s.passwordResetURL(token)); err != nil {
+		return err
+	}
+
+	log.Printf("password reset requested: userID=%d email=%s", user.ID, user.Email)
+	return nil
+}
+
+func (s *AuthService) CompletePasswordReset(ctx context.Context, req request.PasswordResetCompleteRequest) error {
+	if req.Token == "" || len(req.Password) < 8 {
+		fields := make([]FieldError, 0, 2)
+		if req.Token == "" {
+			fields = append(fields, FieldError{Field: "token", Message: "Token is required"})
+		}
+		if len(req.Password) < 8 {
+			fields = append(fields, FieldError{Field: "password", Message: "Password must be at least 8 characters"})
+		}
+		return NewValidationError(fields...)
+	}
+
+	userID, err := s.resets.Consume(ctx, tokenHash(req.Token))
+	if errors.Is(err, repository.ErrNotFound) {
+		return repository.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	if _, err := s.users.SetPassword(ctx, userID, string(hash)); err != nil {
+		return err
+	}
+	_, err = s.sessions.RevokeSubject(ctx, userID)
+	return err
+}
+
 func (s *AuthService) Logout(ctx context.Context, authHeader string) (string, error) {
 	_, token := splitAuth(authHeader)
-	if token == "" { return "", ErrUnauthorized }
+	if token == "" {
+		return "", ErrUnauthorized
+	}
 	if err := s.sessions.Delete(ctx, token); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return "", ErrUnauthorized
@@ -169,7 +245,9 @@ func (s *AuthService) UpdateUserStatus(ctx context.Context, userID int64, req re
 	}
 
 	revokeSessions := status == repository.AccountBanned
-	if req.RevokeSessions != nil { revokeSessions = *req.RevokeSessions }
+	if req.RevokeSessions != nil {
+		revokeSessions = *req.RevokeSessions
+	}
 
 	var user entity.User
 	var err error
@@ -246,6 +324,18 @@ func (s *AuthService) activationURL(token string) string {
 	parsed, err := url.Parse(s.cfg.ActivationURL)
 	if err != nil {
 		return s.cfg.ActivationURL + "?token=" + url.QueryEscape(token)
+	}
+
+	query := parsed.Query()
+	query.Set("token", token)
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func (s *AuthService) passwordResetURL(token string) string {
+	parsed, err := url.Parse(s.cfg.PasswordResetURL)
+	if err != nil {
+		return s.cfg.PasswordResetURL + "?token=" + url.QueryEscape(token)
 	}
 
 	query := parsed.Query()

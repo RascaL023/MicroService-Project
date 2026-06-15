@@ -7,18 +7,14 @@
             - toast notification
             - diffrent dashboard contents by user role
     - user-service: 
+        - profile page
         - more user data
+        - better excel import template
 
 # LAST:
     - user-service: 
+        - forgot password
         - bulk add via file
-    - auth-service:
-        - fix SSOT user account, role of new user = USER, no ban
-    - course-service: 
-        - refactor to caching and async user service strategy
-        - subject module 
-        - group schedule
-        - subject material
 
 # TODO:
     - course-service: 

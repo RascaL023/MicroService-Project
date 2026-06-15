@@ -44,4 +44,24 @@ public class EmailSender {
         mailSender.send(message);
         log.info("Activation email sent to {}", to);
     }
+
+    public void sendPasswordResetEmail(String to, String resetUrl) throws Exception {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
+
+        if (from != null && !from.isBlank()) {
+            helper.setFrom(from);
+        }
+        helper.setTo(to);
+        helper.setSubject("Reset Password");
+        helper.setText("""
+            <p>Halo,</p>
+            <p>Kami menerima permintaan reset password untuk akun kamu. Klik link berikut untuk membuat password baru:</p>
+            <p><a href="%s">Reset password</a></p>
+            <p>Jika kamu tidak merasa meminta ini, abaikan email ini.</p>
+            """.formatted(resetUrl), true);
+
+        mailSender.send(message);
+        log.info("Password reset email sent to {}", to);
+    }
 }

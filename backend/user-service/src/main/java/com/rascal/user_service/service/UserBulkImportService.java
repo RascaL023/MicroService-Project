@@ -137,13 +137,14 @@ public class UserBulkImportService {
 
             Map<String, Integer> columns = readHeader(sheet);
             int lastRow = sheet.getLastRowNum();
-            if (lastRow > maxImportRows)
-                throw new BadRequestException("Maximum import rows is " + maxImportRows);
 
             DataFormatter formatter = new DataFormatter(Locale.ROOT);
-            for (int rowIndex = 1; rowIndex <= lastRow; rowIndex++) {
+            int importRowCount = 0;
+            for (int rowIndex = headerStartRow + 1; rowIndex <= lastRow; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (isBlankRow(row)) continue;
+                if (++importRowCount > maxImportRows)
+                    throw new BadRequestException("Maximum import rows is " + maxImportRows);
 
                 int excelRow = rowIndex + 1;
                 try {
@@ -255,7 +256,7 @@ public class UserBulkImportService {
             throw new ConflictException("Excel column config is missing");
 
         for (String header : columnHeaders.values()) {
-            String configuredHeader = normalizeHeader(header);
+            String configuredHeader = configuredHeader(header);
             if (!columns.containsKey(configuredHeader))
                 throw new BadRequestException("Missing Excel column: " + configuredHeader);
         }
