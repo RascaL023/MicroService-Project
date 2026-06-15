@@ -6,8 +6,14 @@
         - designing better UX:
             - toast notification
             - diffrent dashboard contents by user role
+    - user-service: 
+        - more user data
 
 # LAST:
+    - user-service: 
+        - bulk add via file
+    - auth-service:
+        - fix SSOT user account, role of new user = USER, no ban
     - course-service: 
         - refactor to caching and async user service strategy
         - subject module 
@@ -15,10 +21,6 @@
         - subject material
 
 # TODO:
-    - auth-service:
-        - fix SSOT user account, role of new user = USER, no ban
-    - user-service: 
-        - bulk add via file
     - course-service: 
         - meeting system
         - assignment and quiz

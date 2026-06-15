@@ -3,7 +3,8 @@ package com.rascal.user_service.dto.response;
 import java.util.List;
 
 public record UserBulkImportResponse(
-    int importedCount,
+    int createdCount,
+    int skippedCount,
     int failedCount,
-    List<UserImportRowError> errors
+    List<UserImportRowReport> rows
 ) { }

@@ -1,6 +1,8 @@
 package com.rascal.user_service.dto.response;
 
-public record UserImportRowError(
+public record UserImportRowReport(
     int row,
+    String email,
+    String status,
     String message
 ) { }

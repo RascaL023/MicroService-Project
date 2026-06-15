@@ -6,6 +6,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.RedisStreamCommands.XAddOptions;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -57,7 +58,11 @@ public class UserEventPublisher {
         body.putAll(extra);
 
         try {
-            redisTemplate.opsForStream().add(MapRecord.create(stream, body));
+            MapRecord<String, String, String> mapRecord = MapRecord.create(stream, body);
+            redisTemplate.opsForStream().add(
+                mapRecord,
+                XAddOptions.maxlen(100).approximateTrimming(true)
+            );
         } catch (RuntimeException err) {
             log.warn("Failed to publish {} event for user {}: {}", type, user.getId(), err.getMessage());
             log.debug("User event publish failure detail", err);

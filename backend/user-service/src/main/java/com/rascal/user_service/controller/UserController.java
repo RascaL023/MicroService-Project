@@ -25,6 +25,7 @@ import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
 import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
+import com.rascal.user_service.service.UserBulkImportService;
 import com.rascal.user_service.service.UserService;
 
 import id.rascal.response_kit.util.ApiResponse;
@@ -35,9 +36,14 @@ import jakarta.validation.Valid;
 public class UserController {
 
     private final UserService userService;
+    private final UserBulkImportService userBulkImportService;
 
-    public UserController(UserService userService) {
+    public UserController(
+        UserService userService,
+        UserBulkImportService userBulkImportService
+    ) {
         this.userService = userService;
+        this.userBulkImportService = userBulkImportService;
     }
 
 
@@ -89,10 +95,13 @@ public class UserController {
 
     @PostMapping(value = "/bulk/excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('user.*', 'user.create')")
-    public ResponseEntity<?> bulkCreateByExcel(@RequestParam MultipartFile file) {
+    public ResponseEntity<?> bulkCreateByExcel(
+        @RequestParam Integer batch,
+        @RequestParam MultipartFile file
+    ) {
         return ApiResponse.success(
             HttpStatus.CREATED,
-            userService.bulkImportExcel(file)
+            userBulkImportService.importExcel(batch, file)
         );
     }
 
