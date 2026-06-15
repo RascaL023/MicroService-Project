@@ -148,6 +148,8 @@ func (c *UserEventConsumer) handle(ctx context.Context, values map[string]any) e
 		return err
 	case "UserEmailUpdated":
 		_, err = c.users.UpdateEmail(ctx, userID, email)
+		if err != nil { return err }
+		_, err = c.sessions.RevokeSubject(ctx, userID)
 		return err
 	case "UserDeleted":
 		if err := c.users.MarkDeleted(ctx, userID); err != nil {

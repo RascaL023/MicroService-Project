@@ -147,10 +147,11 @@ func (r *UserRepository) ProvisionDefaultUser(ctx context.Context, userID int64,
 func (r *UserRepository) UpdateEmail(ctx context.Context, userID int64, email string) (entity.User, error) {
 	user, err := r.findOneReturning(ctx, `
 		UPDATE users
-		SET email=$2, updated_at=now()
+		SET email=$2, updated_at=now(),
+		email_verified_at=NULL, status=$3, hash_password=NULL
 		WHERE id=$1 AND deleted_at IS NULL
 		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
-	`, userID, email)
+	`, userID, email, AccountPendingActivation)
 	if err != nil {
 		if isDuplicate(err) {
 			return entity.User{}, ErrDuplicate
