@@ -6,10 +6,10 @@ RUN_DIR="$ROOT_DIR/.assets/run"
 LOG_DIR="$RUN_DIR/logs"
 COMPOSE_FILE="$ROOT_DIR/api-gateway/docker-compose.yml"
 NGINX_CONF="${DEV_TOGGLE_NGINX_CONF:-$ROOT_DIR/reverse-proxy/nginx.conf}"
-NGINX_PREFIX="$RUN_DIR/nginx"
+NGINX_PREFIX="$RUN_DIR"
 NGINX_PID_FILE="$RUN_DIR/proxy.pid"
 
-mkdir -p "$RUN_DIR" "$LOG_DIR" "$NGINX_PREFIX/logs"
+mkdir -p "$RUN_DIR" "$LOG_DIR"
 
 TARGETS=(compose auth user course notification frontend proxy)
 LOCAL_TARGETS=(auth user course notification frontend)
@@ -121,7 +121,7 @@ log_file() {
 
 is_pid_running() {
   local pid="${1:-}"
-  [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1
+  [[ -n "$pid" ]] && { kill -0 "$pid" >/dev/null 2>&1 || ps -p "$pid" >/dev/null 2>&1; }
 }
 
 target_pid() {
@@ -324,12 +324,46 @@ nginx_cmd() {
   local sudo_prefix=""
 
   has_command nginx || die "nginx tidak ditemukan"
-  if [[ "${DEV_TOGGLE_NGINX_SUDO:-1}" != "0" && "$(id -u)" != "0" ]]; then
+  if nginx_needs_sudo; then
     has_command sudo || die "sudo tidak ditemukan, padahal nginx diset memakai sudo"
     sudo_prefix="sudo "
   fi
 
   printf '%snginx' "$sudo_prefix"
+}
+
+nginx_needs_sudo() {
+  [[ "${DEV_TOGGLE_NGINX_SUDO:-1}" != "0" && "$(id -u)" != "0" ]]
+}
+
+ensure_nginx_sudo_ready() {
+  if ! nginx_needs_sudo; then
+    return 0
+  fi
+
+  has_command sudo || die "sudo tidak ditemukan, padahal nginx diset memakai sudo"
+
+  if sudo -n true >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ ! -t 0 ]]; then
+    die "nginx butuh password sudo, tapi terminal tidak interaktif. Jalankan 'sudo -v' dulu atau set DEV_TOGGLE_NGINX_SUDO=0 jika nginx tidak perlu sudo"
+  fi
+
+  info "nginx membutuhkan sudo; masukkan password jika diminta"
+  sudo -v || die "sudo gagal, proxy tidak dijalankan"
+}
+
+nginx_globals() {
+  local globals
+  globals="pid $NGINX_PID_FILE; error_log $LOG_DIR/proxy-error.log;"
+
+  if nginx_needs_sudo; then
+    globals="user $(id -un) $(id -gn); $globals"
+  fi
+
+  printf '%s' "$globals"
 }
 
 is_proxy_running() {
@@ -349,26 +383,28 @@ start_proxy() {
   fi
 
   local nginx logfile
+  ensure_nginx_sudo_ready
   nginx="$(nginx_cmd)"
   logfile="$(log_file proxy)"
 
   info "starting proxy with nginx config: $NGINX_CONF"
   info "log: $logfile"
 
-  (
-    exec $nginx -p "$NGINX_PREFIX" -c "$NGINX_CONF" \
-      -g "daemon off; pid $NGINX_PREFIX/logs/nginx.pid; error_log $LOG_DIR/proxy-error.log;"
-  ) >"$logfile" 2>&1 &
+  mkdir -p "$RUN_DIR" "$LOG_DIR"
+  rm -f "$NGINX_PID_FILE"
 
-  printf '%s\n' "$!" >"$NGINX_PID_FILE"
-  sleep 0.5
+  $nginx -p "$NGINX_PREFIX" -c "$NGINX_CONF" -g "$(nginx_globals)" >"$logfile" 2>&1
 
-  if is_proxy_running; then
-    info "proxy running (pid $(sed -n '1p' "$NGINX_PID_FILE"))"
-  else
-    rm -f "$NGINX_PID_FILE"
-    die "proxy gagal start atau pid file tidak dibuat: $NGINX_PID_FILE"
-  fi
+  for _ in {1..20}; do
+    if is_proxy_running; then
+      info "proxy running (pid $(sed -n '1p' "$NGINX_PID_FILE"))"
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  rm -f "$NGINX_PID_FILE"
+  die "proxy gagal start atau pid file tidak dibuat: $NGINX_PID_FILE"
 }
 
 stop_proxy() {
@@ -378,10 +414,14 @@ stop_proxy() {
     return 0
   fi
 
-  local pid
+  local pid nginx logfile
   pid="$(sed -n '1p' "$NGINX_PID_FILE")"
   info "stopping proxy (pid $pid)"
-  kill "$pid" >/dev/null 2>&1 || true
+  ensure_nginx_sudo_ready
+  nginx="$(nginx_cmd)"
+  logfile="$(log_file proxy)"
+
+  $nginx -p "$NGINX_PREFIX" -c "$NGINX_CONF" -g "$(nginx_globals)" -s quit >>"$logfile" 2>&1 || true
 
   for _ in {1..20}; do
     if ! is_pid_running "$pid"; then
@@ -393,7 +433,11 @@ stop_proxy() {
   done
 
   info "proxy belum berhenti, kirim SIGKILL"
-  kill -9 "$pid" >/dev/null 2>&1 || true
+  if nginx_needs_sudo; then
+    sudo kill -9 "$pid" >/dev/null 2>&1 || true
+  else
+    kill -9 "$pid" >/dev/null 2>&1 || true
+  fi
   rm -f "$NGINX_PID_FILE"
 }
 
