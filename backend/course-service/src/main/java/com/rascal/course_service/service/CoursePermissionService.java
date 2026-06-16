@@ -29,15 +29,23 @@ public class CoursePermissionService {
             "course.*", "group.*", "enrollment.*"
         );
 
-        Enrollment enrollment = enrollmentRepository
-            .findByUserIdAndGroupIdAndDeletedAtIsNull(userId, groupId)
-            .orElse(null);
+        String role = null;
+        boolean isMember = false;
+        boolean isInstructor = false;
+        boolean canManage = hasAccessGlobally;
+        boolean canRead = canManage;
 
-        String role = enrollment == null ? null : enrollment.getRole().name();
-        boolean isMember = enrollment != null;
-        boolean isInstructor = enrollment != null && enrollment.getRole() == CourseRoleEnum.INSTRUCTOR;
-        boolean canRead = hasAccessGlobally || isMember;
-        boolean canManage = hasAccessGlobally || isInstructor;
+        if (!canManage) {
+            Enrollment enrollment = enrollmentRepository
+                .findByUserIdAndGroupIdAndDeletedAtIsNull(userId, groupId)
+                .orElse(null);
+
+            role = enrollment == null ? null : enrollment.getRole().name();
+            isMember = enrollment != null;
+            isInstructor = enrollment != null && enrollment.getRole() == CourseRoleEnum.INSTRUCTOR;
+            canRead = isMember;
+            canManage = isInstructor;
+        }
 
         return new GroupAccessResponse(
             userId, groupId,

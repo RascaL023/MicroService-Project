@@ -12,11 +12,12 @@
         - better excel import template
 
 # LAST:
+    - course-service: 
+        - meeting system
     - user-service: 
         - forgot password
         - bulk add via file
 
 # TODO:
     - course-service: 
-        - meeting system
         - assignment and quiz
