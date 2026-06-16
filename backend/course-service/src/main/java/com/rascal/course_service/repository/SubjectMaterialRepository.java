@@ -1,6 +1,7 @@
 package com.rascal.course_service.repository;
 
 import java.util.Optional;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,11 +18,21 @@ public interface SubjectMaterialRepository extends JpaRepository<SubjectMaterial
     Optional<SubjectMaterial> findByIdAndDeletedAtIsNull(Long id);
 
     @Query("""
-        select m
-        from SubjectMaterial m
-        where m.deletedAt is null
-            and (:subjectId is null or m.subject.id = :subjectId)
-            and lower(m.title) like lower(concat('%', cast(:title as string), '%'))
+        SELECT m
+        FROM SubjectMaterial m
+        WHERE m.deletedAt IS NULL
+            AND m.subject.id = :subjectId
+        ORDER BY m.meetingNumber ASC
+    """)
+    @EntityGraph(attributePaths = "subject")
+    List<SubjectMaterial> findActiveBySubjectIdOrderByMeetingNumberAsc(@Param("subjectId") Long subjectId);
+
+    @Query("""
+        SELECT m
+        FROM SubjectMaterial m
+        WHERE m.deletedAt IS NULL
+            AND (:subjectId IS NULL OR m.subject.id = :subjectId)
+            AND lower(m.title) LIKE LOWER(CONCAT('%', CAST(:title AS string), '%'))
     """)
     @EntityGraph(attributePaths = "subject")
     Page<SubjectMaterial> searchActiveMaterials(

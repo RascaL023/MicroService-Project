@@ -17,6 +17,7 @@ import com.rascal.course_service.dto.request.GroupRequest;
 import com.rascal.course_service.dto.response.GroupCompleteResponse;
 import com.rascal.course_service.dto.response.GroupDetailResponse;
 import com.rascal.course_service.dto.response.GroupMemberResponse;
+import com.rascal.course_service.dto.response.GroupMeetingResponse;
 import com.rascal.course_service.dto.response.GroupResponse;
 import com.rascal.course_service.dto.response.GroupScheduleResponse;
 import com.rascal.course_service.dto.response.UserLookupResponse;
@@ -42,19 +43,22 @@ public class GroupService {
     private final GroupScheduleRepository groupScheduleRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final CourseUserCacheService courseUserCacheService;
+    private final GroupMeetingService groupMeetingService;
 
     public GroupService(
         GroupRepository groupRepository,
         SubjectRepository subjectRepository,
         GroupScheduleRepository groupScheduleRepository,
         EnrollmentRepository enrollmentRepository,
-        CourseUserCacheService courseUserCacheService
+        CourseUserCacheService courseUserCacheService,
+        GroupMeetingService groupMeetingService
     ) {
         this.groupRepository = groupRepository;
         this.subjectRepository = subjectRepository;
         this.groupScheduleRepository = groupScheduleRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.courseUserCacheService = courseUserCacheService;
+        this.groupMeetingService = groupMeetingService;
     }
 
     @Transactional(readOnly = true)
@@ -70,6 +74,7 @@ public class GroupService {
             .findActiveByGroupIdOrderByDayAndTemplateStartTime(id)
             .stream().map(GroupScheduleMapper::toResponse)
             .toList();
+        List<GroupMeetingResponse> meetings = groupMeetingService.getTimelineByGroup(group);
 
         List<Enrollment> enrollmentsThisGroup = enrollmentRepository
             .findByGroupIdAndDeletedAtIsNullOrderByRoleAscUserIdAsc(id);
@@ -85,6 +90,7 @@ public class GroupService {
         return new GroupDetailResponse(
             toResponse(group),
             schedules,
+            meetings,
             members
         );
     }

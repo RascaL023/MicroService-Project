@@ -5,5 +5,6 @@ import java.util.List;
 public record GroupDetailResponse(
     GroupResponse group,
     List<GroupScheduleResponse> schedules,
+    List<GroupMeetingResponse> meetings,
     List<GroupMemberResponse> members
 ) { }
