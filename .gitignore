@@ -32,6 +32,31 @@ build/
 ### VS Code ###
 .vscode/
 
+
+### Svelte ###
+**/node_modules/
+**/.svelte-kit/
+**/build/
+**/.output/
+**/.vercel/
+**/.netlify/
+**/.wrangler/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+
 ### Me ###
 # **/.assets/**
 **/.private/**
@@ -39,7 +64,7 @@ build/
 **/go.sum
 **/**.bak
 **.http
-frontend
+# frontend
 .npm-cache
 **/bin/**
 **/logs/
