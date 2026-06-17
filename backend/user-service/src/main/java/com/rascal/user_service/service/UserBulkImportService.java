@@ -255,7 +255,7 @@ public class UserBulkImportService {
         if (columnHeaders == null || columnHeaders.isEmpty())
             throw new ConflictException("Excel column config is missing");
 
-        for (String header : columnHeaders.values()) {
+        for (String header : columnHeaders.keySet()) {
             String configuredHeader = configuredHeader(header);
             if (!columns.containsKey(configuredHeader))
                 throw new BadRequestException("Missing Excel column: " + configuredHeader);
