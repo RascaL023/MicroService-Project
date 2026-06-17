@@ -5,8 +5,6 @@
     - course-service: 
         - subject search (FE)
             - subject material updateByID (FE)
-        - weekly report
-        - grade and or rank system
     - frontend: 
         - designing better UX:
             - toast notification
@@ -18,6 +16,7 @@
 
 # LAST:
     - course-service: 
+        - assignment and quiz
         - meeting system
     - user-service: 
         - forgot password
@@ -25,4 +24,5 @@
 
 # TODO:
     - course-service: 
-        - assignment and quiz
+        - weekly report
+        - grade and or rank system

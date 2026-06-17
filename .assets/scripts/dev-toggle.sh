@@ -5,7 +5,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUN_DIR="$ROOT_DIR/.assets/run"
 LOG_DIR="$RUN_DIR/logs"
 COMPOSE_FILE="$ROOT_DIR/api-gateway/docker-compose.yml"
-NGINX_CONF="${DEV_TOGGLE_NGINX_CONF:-$ROOT_DIR/reverse-proxy/nginx.conf}"
+PROXY_MODE="${DEV_TOGGLE_PROXY_MODE:-dev}"
+case "$PROXY_MODE" in
+  dev) DEFAULT_NGINX_CONF="$ROOT_DIR/reverse-proxy/nginx.dev.conf" ;;
+  static) DEFAULT_NGINX_CONF="$ROOT_DIR/reverse-proxy/nginx.static.conf" ;;
+  *) printf 'error: DEV_TOGGLE_PROXY_MODE harus dev atau static, bukan: %s\n' "$PROXY_MODE" >&2; exit 1 ;;
+esac
+NGINX_CONF="${DEV_TOGGLE_NGINX_CONF:-$DEFAULT_NGINX_CONF}"
 NGINX_PREFIX="$RUN_DIR"
 NGINX_PID_FILE="$RUN_DIR/proxy.pid"
 
@@ -50,6 +56,8 @@ Docker:
 
 Nginx:
   Proxy uses sudo nginx by default.
+  Set DEV_TOGGLE_PROXY_MODE=dev to proxy frontend to Vite on :5173. This is the default.
+  Set DEV_TOGGLE_PROXY_MODE=static to serve frontend/build directly and skip frontend on start all.
   Set DEV_TOGGLE_NGINX_CONF=/path/to/nginx.conf to override config.
   Set DEV_TOGGLE_NGINX_SUDO=0 to run nginx without sudo.
 EOF
@@ -320,6 +328,10 @@ logs_local() {
   tail -f "$logfile"
 }
 
+should_start_frontend_for_proxy() {
+  [[ "$PROXY_MODE" != "static" ]]
+}
+
 nginx_cmd() {
   local sudo_prefix=""
 
@@ -359,10 +371,6 @@ nginx_globals() {
   local globals
   globals="pid $NGINX_PID_FILE; error_log $LOG_DIR/proxy-error.log;"
 
-  if nginx_needs_sudo; then
-    globals="user $(id -un) $(id -gn); $globals"
-  fi
-
   printf '%s' "$globals"
 }
 
@@ -374,6 +382,10 @@ is_proxy_running() {
 
 start_proxy() {
   [[ -f "$NGINX_CONF" ]] || die "nginx config tidak ditemukan: $NGINX_CONF"
+  if [[ "$PROXY_MODE" == "static" && -z "${DEV_TOGGLE_NGINX_CONF:-}" ]]; then
+    [[ -f "$ROOT_DIR/frontend/build/index.html" ]] ||
+      die "frontend/build belum ada. Jalankan: cd frontend && npm run build"
+  fi
   if is_proxy_running; then
     info "proxy sudah running (pid $(sed -n '1p' "$NGINX_PID_FILE"))"
     return 0
@@ -387,7 +399,7 @@ start_proxy() {
   nginx="$(nginx_cmd)"
   logfile="$(log_file proxy)"
 
-  info "starting proxy with nginx config: $NGINX_CONF"
+  info "starting proxy in $PROXY_MODE mode with nginx config: $NGINX_CONF"
   info "log: $logfile"
 
   mkdir -p "$RUN_DIR" "$LOG_DIR"
@@ -443,9 +455,9 @@ stop_proxy() {
 
 status_proxy() {
   if is_proxy_running; then
-    printf '%-14s running pid=%s log=%s config=%s\n' "proxy" "$(sed -n '1p' "$NGINX_PID_FILE")" "$(log_file proxy)" "$NGINX_CONF"
+    printf '%-14s running pid=%s mode=%s log=%s config=%s\n' "proxy" "$(sed -n '1p' "$NGINX_PID_FILE")" "$PROXY_MODE" "$(log_file proxy)" "$NGINX_CONF"
   else
-    printf '%-14s stopped log=%s config=%s\n' "proxy" "$(log_file proxy)" "$NGINX_CONF"
+    printf '%-14s stopped mode=%s log=%s config=%s\n' "proxy" "$PROXY_MODE" "$(log_file proxy)" "$NGINX_CONF"
   fi
 }
 
@@ -477,6 +489,10 @@ start_target() {
     all)
       compose_up
       for item in "${LOCAL_TARGETS[@]}"; do
+        if [[ "$item" == "frontend" ]] && ! should_start_frontend_for_proxy; then
+          info "skip frontend: proxy static mode memakai frontend/build"
+          continue
+        fi
         if is_local_available "$item"; then
           start_local "$item"
         else
@@ -541,6 +557,9 @@ toggle_target() {
           break
         fi
       done
+      if is_proxy_running; then
+        any_running="true"
+      fi
       if [[ "$any_running" == "true" ]]; then
         stop_target all
       else
