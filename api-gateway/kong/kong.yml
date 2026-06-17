@@ -39,6 +39,7 @@ services:
           - /api/schedule-templates
           - /api/subject-materials
           - /api/subject-modules
+          - /api/assessments
         strip_path: false
         plugins:
           - name: my-session-injector

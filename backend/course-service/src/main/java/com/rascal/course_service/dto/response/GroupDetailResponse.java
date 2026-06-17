@@ -6,5 +6,6 @@ public record GroupDetailResponse(
     GroupResponse group,
     List<GroupScheduleResponse> schedules,
     List<GroupMeetingResponse> meetings,
+    List<AssessmentResponse> assessments,
     List<GroupMemberResponse> members
 ) { }

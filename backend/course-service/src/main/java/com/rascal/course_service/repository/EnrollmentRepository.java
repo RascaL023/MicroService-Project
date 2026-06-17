@@ -25,6 +25,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @EntityGraph(attributePaths = {"group", "group.subject"})
     List<Enrollment> findByGroupIdAndDeletedAtIsNullOrderByRoleAscUserIdAsc(Long groupId);
+    List<Enrollment> findByGroupIdAndRoleAndDeletedAtIsNull(Long groupId, CourseRoleEnum role);
 
     boolean existsByUserIdAndGroupIdAndDeletedAtIsNull(Long userId, Long groupId);
     boolean existsByUserIdAndGroupIdAndRoleAndDeletedAtIsNull(Long userId, Long groupId, CourseRoleEnum role);

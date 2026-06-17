@@ -20,6 +20,7 @@ import com.rascal.course_service.dto.response.GroupMemberResponse;
 import com.rascal.course_service.dto.response.GroupMeetingResponse;
 import com.rascal.course_service.dto.response.GroupResponse;
 import com.rascal.course_service.dto.response.GroupScheduleResponse;
+import com.rascal.course_service.dto.response.AssessmentResponse;
 import com.rascal.course_service.dto.response.UserLookupResponse;
 import com.rascal.course_service.entity.Enrollment;
 import com.rascal.course_service.entity.Group;
@@ -44,6 +45,7 @@ public class GroupService {
     private final EnrollmentRepository enrollmentRepository;
     private final CourseUserCacheService courseUserCacheService;
     private final GroupMeetingService groupMeetingService;
+    private final AssessmentService assessmentService;
 
     public GroupService(
         GroupRepository groupRepository,
@@ -51,7 +53,8 @@ public class GroupService {
         GroupScheduleRepository groupScheduleRepository,
         EnrollmentRepository enrollmentRepository,
         CourseUserCacheService courseUserCacheService,
-        GroupMeetingService groupMeetingService
+        GroupMeetingService groupMeetingService,
+        AssessmentService assessmentService
     ) {
         this.groupRepository = groupRepository;
         this.subjectRepository = subjectRepository;
@@ -59,6 +62,7 @@ public class GroupService {
         this.enrollmentRepository = enrollmentRepository;
         this.courseUserCacheService = courseUserCacheService;
         this.groupMeetingService = groupMeetingService;
+        this.assessmentService = assessmentService;
     }
 
     @Transactional(readOnly = true)
@@ -75,6 +79,7 @@ public class GroupService {
             .stream().map(GroupScheduleMapper::toResponse)
             .toList();
         List<GroupMeetingResponse> meetings = groupMeetingService.getTimelineByGroup(group);
+        List<AssessmentResponse> assessments = assessmentService.getByGroupId(group.getId());
 
         List<Enrollment> enrollmentsThisGroup = enrollmentRepository
             .findByGroupIdAndDeletedAtIsNullOrderByRoleAscUserIdAsc(id);
@@ -91,6 +96,7 @@ public class GroupService {
             toResponse(group),
             schedules,
             meetings,
+            assessments,
             members
         );
     }
