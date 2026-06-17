@@ -26,7 +26,7 @@ public class AssessmentGradeController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('course.*', 'group.*', 'enrollment.*', 'group.read')")
+    // @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getByAssessmentId(@PathVariable Long assessmentId) {
         return ApiResponse.success(
             HttpStatus.OK,
@@ -35,7 +35,7 @@ public class AssessmentGradeController {
     }
 
     @PatchMapping
-    // @PreAuthorize("hasAnyAuthority('course.*', 'group.*', 'enrollment.*', 'group.update')")
+    @PreAuthorize("hasAnyAuthority('course.*', 'group.*', 'enrollment.*', 'group.update')")
     public ResponseEntity<?> upsertBatch(
         @PathVariable Long assessmentId,
         @RequestBody AssessmentGradeBatchRequest request
