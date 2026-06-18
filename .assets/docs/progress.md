@@ -8,7 +8,6 @@
     - frontend: 
         - designing better UX:
             - toast notification
-            - diffrent dashboard contents by user role
     - user-service: 
         - profile page
         - more user data
@@ -23,6 +22,8 @@
         - bulk add via file
 
 # TODO:
+    - frontend:
+        - diffrent dashboard contents by user role
     - course-service: 
         - weekly report
         - grade and or rank system
