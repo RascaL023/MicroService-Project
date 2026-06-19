@@ -13,7 +13,7 @@
 	let batches = $state<Batch[]>([]);
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let session = $state<LoginData | null>(null);
-	let filters = $state({ name: '', batch: '' });
+	let filters = $state({ name: '', batch: '', sortBy: 'id', sortDirection: 'desc' });
 	let form = $state({ name: '', email: '', batch: '', gender: 'L' });
 	let patch = $state({ id: '', name: '', email: '', batch: '', gender: 'L' });
 	let showCreate = $state(false);
@@ -59,7 +59,7 @@
 		const query = new URLSearchParams({
 			page: String(pageMeta.page),
 			size: String(pageMeta.size),
-			sort: 'id,desc'
+			sort: `${filters.sortBy},${filters.sortDirection}`
 		});
 		if (filters.name.trim()) query.set('name', filters.name.trim());
 		if (filters.batch) query.set('batch', filters.batch);
@@ -297,6 +297,22 @@
 					{#each batches as batch}
 						<option value={batch.id}>Batch {batch.id}</option>
 					{/each}
+				</select>
+			</label>
+			<label>
+				<span>Urutkan</span>
+				<select bind:value={filters.sortBy}>
+					<option value="id">Terbaru</option>
+					<option value="name">Nama</option>
+					<option value="email">Email</option>
+					<option value="status">Status</option>
+				</select>
+			</label>
+			<label>
+				<span>Arah</span>
+				<select bind:value={filters.sortDirection}>
+					<option value="asc">Naik</option>
+					<option value="desc">Turun</option>
 				</select>
 			</label>
 			<button class="btn btn-primary" type="submit">
@@ -578,7 +594,7 @@
 
 	.filters {
 		display: grid;
-		grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) auto;
+		grid-template-columns: minmax(190px, 1fr) repeat(3, minmax(140px, 190px)) auto;
 		gap: 0.875rem;
 		align-items: end;
 		flex: 1;

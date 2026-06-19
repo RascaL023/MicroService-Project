@@ -43,6 +43,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
     boolean existsByEmailAndDeletedAtIsNull(String email);
     boolean existsByEmailAndIdNotAndDeletedAtIsNull(String email, Long id);
+    long countByDeletedAtIsNull();
     long countByBatchIdAndDeletedAtIsNull(Integer batchId);
 
     @Query("""

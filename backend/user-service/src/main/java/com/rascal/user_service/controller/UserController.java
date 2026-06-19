@@ -72,6 +72,15 @@ public class UserController {
         return ApiResponse.success(HttpStatus.OK, responses);
     }
 
+    @GetMapping("/dashboard-summary")
+    @PreAuthorize("hasAuthority('user.*')")
+    public ResponseEntity<?> getDashboardSummary() {
+        return ApiResponse.success(
+            HttpStatus.OK,
+            userService.getDashboardSummary()
+        );
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('user.*', 'user.read')")
     public ResponseEntity<?> getById(@PathVariable Long id) {

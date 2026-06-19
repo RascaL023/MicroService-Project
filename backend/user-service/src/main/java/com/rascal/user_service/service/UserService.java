@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.rascal.user_service.dto.mapper.UserMapper;
 import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
+import com.rascal.user_service.dto.response.UserDashboardSummaryResponse;
 import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.entity.User;
 import com.rascal.user_service.event.UserEventPublisher;
@@ -62,6 +63,14 @@ public class UserService {
         else if (ids.size() > 100) throw new BadRequestException("Too much");
 
         return userRepository.findByIdInAndDeletedAtIsNull(ids);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDashboardSummaryResponse getDashboardSummary() {
+        return new UserDashboardSummaryResponse(
+            userRepository.countByDeletedAtIsNull(),
+            batchRepository.countByDeletedAtIsNull()
+        );
     }
 
     @Transactional(readOnly = true)

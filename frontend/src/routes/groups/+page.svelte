@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icons from '$lib/components/Icons.svelte';
@@ -14,7 +15,14 @@
 	let groups = $state<Group[]>([]);
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let session = $state<LoginData | null>(null);
-	let filters = $state({ name: '', subjectId: '', academicYear: '', status: 'ON_GOING' });
+	let filters = $state({
+		name: '',
+		subjectId: '',
+		academicYear: '',
+		status: 'ON_GOING',
+		sortBy: 'name',
+		sortDirection: 'asc'
+	});
 	let form = $state({ name: '', subjectId: '', academicYear: '2026/2027' });
 	let completeForm = $state({ subjectId: '', academicYear: '2026/2027' });
 	let showCreate = $state(false);
@@ -25,6 +33,10 @@
 	let completing = $state(false);
 
 	const canManage = $derived(hasAnyAuthority(session, ['group.create', 'group.update', 'group.delete', 'group.*']));
+	const portalPrefix = $derived(
+		page.url.pathname.startsWith('/admin/') ? '/admin' :
+		page.url.pathname.startsWith('/app/') ? '/app' : ''
+	);
 
 	onMount(() => {
 		session = readSession();
@@ -63,7 +75,7 @@
 		const query = new URLSearchParams({
 			page: String(pageMeta.page),
 			size: String(pageMeta.size),
-			sort: 'name,asc'
+			sort: `${filters.sortBy},${filters.sortDirection}`
 		});
 		if (filters.name.trim()) query.set('name', filters.name.trim());
 		if (filters.subjectId) query.set('subjectId', filters.subjectId);
@@ -206,6 +218,22 @@
 					<option value="">Semua status</option>
 				</select>
 			</label>
+			<label>
+				<span>Urutkan</span>
+				<select bind:value={filters.sortBy}>
+					<option value="name">Nama</option>
+					<option value="academicYear">Tahun akademik</option>
+					<option value="status">Status</option>
+					<option value="id">Terbaru</option>
+				</select>
+			</label>
+			<label>
+				<span>Arah</span>
+				<select bind:value={filters.sortDirection}>
+					<option value="asc">Naik</option>
+					<option value="desc">Turun</option>
+				</select>
+			</label>
 			<button class="btn btn-primary" type="submit">
 				<Icons name="search" size={17} />
 				<span>Filter</span>
@@ -235,7 +263,7 @@
 					</div>
 
 					<div class="group-actions">
-						<button class="btn btn-secondary" type="button" onclick={() => goto(`/groups/${group.id}`)}>
+						<button class="btn btn-secondary" type="button" onclick={() => goto(`${portalPrefix}/groups/${group.id}`)}>
 							<span>Detail</span>
 							<Icons name="chevronRight" size={16} />
 						</button>
@@ -375,7 +403,7 @@
 
 	.filters {
 		display: grid;
-		grid-template-columns: minmax(180px, 1fr) minmax(170px, 220px) minmax(145px, 170px) minmax(145px, 170px) auto;
+		grid-template-columns: minmax(170px, 1fr) repeat(5, minmax(125px, 170px)) auto;
 		gap: 0.875rem;
 		align-items: end;
 		flex: 1;

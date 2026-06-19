@@ -14,8 +14,65 @@ import org.springframework.data.repository.query.Param;
 
 import com.rascal.course_service.entity.Group;
 import com.rascal.course_service.enumerated.CourseStatusEnum;
+import com.rascal.course_service.repository.projection.CourseDashboardSummary;
 
 public interface GroupRepository extends JpaRepository<Group, Long> {
+
+    @Query(value = """
+        SELECT
+            COUNT(*) FILTER (
+                WHERE g.deleted_at IS NULL AND g.status = 'ON_GOING'
+            ) AS "activeGroups",
+            COUNT(*) FILTER (
+                WHERE g.deleted_at IS NULL AND g.status = 'PASSED'
+            ) AS "passedGroups",
+            (
+                SELECT COUNT(*)
+                FROM subjects s
+                WHERE s.deleted_at IS NULL
+            ) AS "subjects",
+            (
+                SELECT COUNT(DISTINCT e.user_id)
+                FROM enrollments e
+                JOIN groups eg ON eg.id = e.group_id
+                WHERE e.deleted_at IS NULL
+                    AND eg.deleted_at IS NULL
+                    AND eg.status = 'ON_GOING'
+                    AND e.role = 'INSTRUCTOR'
+            ) AS "instructors",
+            (
+                SELECT COUNT(DISTINCT e.user_id)
+                FROM enrollments e
+                JOIN groups eg ON eg.id = e.group_id
+                WHERE e.deleted_at IS NULL
+                    AND eg.deleted_at IS NULL
+                    AND eg.status = 'ON_GOING'
+                    AND e.role = 'LEARNER'
+            ) AS "learners",
+            COUNT(*) FILTER (
+                WHERE g.deleted_at IS NULL
+                    AND g.status = 'ON_GOING'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM enrollments e
+                        WHERE e.group_id = g.id
+                            AND e.deleted_at IS NULL
+                            AND e.role = 'INSTRUCTOR'
+                    )
+            ) AS "groupsWithoutInstructor",
+            COUNT(*) FILTER (
+                WHERE g.deleted_at IS NULL
+                    AND g.status = 'ON_GOING'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM group_schedules gs
+                        WHERE gs.group_id = g.id
+                            AND gs.deleted_at IS NULL
+                    )
+            ) AS "groupsWithoutSchedule"
+        FROM groups g
+        """, nativeQuery = true)
+    CourseDashboardSummary getDashboardSummary();
 
     @EntityGraph(attributePaths = "subject")
     Optional<Group> findByIdAndDeletedAtIsNull(Long id);

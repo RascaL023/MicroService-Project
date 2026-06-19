@@ -76,6 +76,28 @@ export type AuthUser = {
 	roles: string[];
 };
 
+export type AuthDashboardSummary = {
+	totalUsers: number;
+	activeUsers: number;
+	pendingActivation: number;
+	bannedUsers: number;
+};
+
+export type UserDashboardSummary = {
+	totalUsers: number;
+	totalBatches: number;
+};
+
+export type CourseDashboardSummary = {
+	activeGroups: number;
+	passedGroups: number;
+	subjects: number;
+	instructors: number;
+	learners: number;
+	groupsWithoutInstructor: number;
+	groupsWithoutSchedule: number;
+};
+
 export type Subject = {
 	id: number;
 	name: string;

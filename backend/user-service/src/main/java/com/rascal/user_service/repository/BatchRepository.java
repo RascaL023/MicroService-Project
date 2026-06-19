@@ -17,5 +17,6 @@ public interface BatchRepository extends JpaRepository<Batch, Integer> {
     Page<Batch> findByNameContainingIgnoreCaseAndDeletedAtIsNull(String name, Pageable pageable);
 
     boolean existsByIdAndDeletedAtIsNull(Integer id);
+    long countByDeletedAtIsNull();
 
 }

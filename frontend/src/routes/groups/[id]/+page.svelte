@@ -54,6 +54,10 @@
 	let success = $state('');
 
 	const groupId = $derived(Number(page.params.id));
+	const portalPrefix = $derived(
+		page.url.pathname.startsWith('/admin/') ? '/admin' :
+		page.url.pathname.startsWith('/app/') ? '/app' : ''
+	);
 	const canEdit = $derived(hasAnyAuthority(session, ['group.update', 'group.*']));
 	const canManageMembers = $derived(hasAnyAuthority(session, ['enrollment.create', 'enrollment.update', 'enrollment.delete', 'enrollment.*']));
 	const canManageSchedules = $derived(hasAnyAuthority(session, ['group-schedule.create', 'group-schedule.delete', 'group-schedule.*']));
@@ -560,7 +564,7 @@
 
 <AccessPanel authorities={['group.read', 'group.*']}>
 	<div class="back-row">
-		<button class="btn btn-ghost" type="button" onclick={() => goto('/groups')}>
+		<button class="btn btn-ghost" type="button" onclick={() => goto(`${portalPrefix}/groups`)}>
 			<Icons name="chevronLeft" size={16} />
 			<span>Kembali ke group</span>
 		</button>
@@ -613,7 +617,7 @@
 				</div>
 
 				<div class="summary-actions">
-					<button class="btn btn-secondary" type="button" onclick={() => goto(`/groups/${groupId}/grades`)}>
+					<button class="btn btn-secondary" type="button" onclick={() => goto(`${portalPrefix}/groups/${groupId}/grades`)}>
 						<Icons name="checkCircle" size={17} />
 						<span>Gradebook</span>
 					</button>

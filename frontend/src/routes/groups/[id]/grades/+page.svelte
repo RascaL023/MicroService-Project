@@ -21,6 +21,10 @@
 	let success = $state('');
 
 	const groupId = $derived(Number(page.params.id));
+	const portalPrefix = $derived(
+		page.url.pathname.startsWith('/admin/') ? '/admin' :
+		page.url.pathname.startsWith('/app/') ? '/app' : ''
+	);
 	const learners = $derived(detail?.members
 		.filter((member) => isLearner(member))
 		.sort((a, b) => (a.user?.name ?? '').localeCompare(b.user?.name ?? '')) ?? []
@@ -133,7 +137,7 @@
 
 <AccessPanel authorities={['group.read', 'group.*']}>
 	<div class="back-row">
-		<button class="btn btn-ghost" type="button" onclick={() => goto(`/groups/${groupId}`)}>
+		<button class="btn btn-ghost" type="button" onclick={() => goto(`${portalPrefix}/groups/${groupId}`)}>
 			<Icons name="chevronLeft" size={16} />
 			<span>Kembali ke detail group</span>
 		</button>

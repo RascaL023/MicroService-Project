@@ -31,6 +31,7 @@ services:
     routes:
       - name: course-protected-route
         paths:
+          - /api/courses
           - /api/subjects
           - /api/groups
           - /api/enrollments

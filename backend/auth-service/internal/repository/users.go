@@ -349,6 +349,24 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 	return users, total, rows.Err()
 }
 
+func (r *UserRepository) CountByStatus(ctx context.Context) (total, active, pending, banned int, err error) {
+	err = r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE status=$1),
+			COUNT(*) FILTER (WHERE status=$2),
+			COUNT(*) FILTER (WHERE status=$3)
+		FROM users
+		WHERE deleted_at IS NULL
+	`, AccountActive, AccountPendingActivation, AccountBanned).Scan(
+		&total,
+		&active,
+		&pending,
+		&banned,
+	)
+	return
+}
+
 func (r *UserRepository) findOne(ctx context.Context, where string, arg any) (entity.User, error) {
 	return r.findOneReturning(ctx, `
 		SELECT u.id, u.email, u.hash_password, u.status, u.email_verified_at, u.created_at, u.updated_at, u.deleted_at

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
 	import Notice from '$lib/components/Notice.svelte';
@@ -15,14 +16,23 @@
 	let minePage = $state<PaginationMeta>({ page: 0, size: 6, totalPages: 1, totalElements: 0 });
 	let groups = $state<Group[]>([]);
 	let subjects = $state<Subject[]>([]);
-	let filters = $state({ userId: '', groupId: '', subjectId: '', academicYear: '', role: '' });
+	let filters = $state({
+		userId: '',
+		groupId: '',
+		subjectId: '',
+		academicYear: '',
+		role: '',
+		sortBy: 'id',
+		sortDirection: 'desc'
+	});
 	let form = $state({ userId: '', groupId: '', role: 'LEARNER' });
 	let patch = $state({ id: '', userId: '', groupId: '', role: '' });
 	let error = $state('');
 	let success = $state('');
 	let session = $state<LoginData | null>(null);
-	const canReadAll = $derived(hasAnyAuthority(session, ['enrollment.read', 'enrollment.*']));
-	const canManage = $derived(hasAnyAuthority(session, ['enrollment.create', 'enrollment.update', 'enrollment.delete', 'enrollment.*']));
+	const isUserPortal = $derived(page.url.pathname.startsWith('/app/'));
+	const canReadAll = $derived(!isUserPortal && hasAnyAuthority(session, ['enrollment.read', 'enrollment.*']));
+	const canManage = $derived(!isUserPortal && hasAnyAuthority(session, ['enrollment.create', 'enrollment.update', 'enrollment.delete', 'enrollment.*']));
 
 	onMount(() => {
 		session = readSession();
@@ -49,9 +59,11 @@
 		const query = new URLSearchParams({
 			page: String(enrollmentPage.page),
 			size: String(enrollmentPage.size),
-			sort: 'id,desc'
+			sort: `${filters.sortBy},${filters.sortDirection}`
 		});
-		for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
+		for (const [key, value] of Object.entries(filters)) {
+			if (key !== 'sortBy' && key !== 'sortDirection' && value) query.set(key, value);
+		}
 		const payload = await api<PageData<Enrollment> | Enrollment[]>(`/api/enrollments?${query}`);
 		enrollments = pageItems(payload);
 		enrollmentPage = paginationMeta(payload, enrollmentPage);
@@ -96,14 +108,20 @@
 
 <svelte:head><title>Enrollments - Divdik Course</title></svelte:head>
 
-<PageTitle eyebrow="Academic Management" title="Enrollments & Peran" description="Manajemen peran user (Instructor/Learner) dalam setiap group kursus." />
+<PageTitle
+	eyebrow={isUserPortal ? 'Learning Access' : 'Academic Management'}
+	title={isUserPortal ? 'Kursus Saya' : 'Enrollments & Peran'}
+	description={isUserPortal
+		? 'Daftar group dan peran Anda dalam kegiatan pembelajaran.'
+		: 'Manajemen peran user (Instructor/Learner) dalam setiap group kursus.'}
+/>
 
 <Notice {error} {success} />
 
 <AccessPanel authorities={['course.read', 'enrollment.read', 'enrollment.*']}>
 	<!-- Session Enrollments -->
 	<section class="mb-4">
-		<h3 class="mb-4">Kursus Saya</h3>
+		{#if !isUserPortal}<h3 class="mb-4">Kursus Saya</h3>{/if}
 		{#if mine.length}
 			<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
 				{#each mine as item}
@@ -127,26 +145,63 @@
 		{/if}
 	</section>
 
-	<hr style="border: none; border-bottom: 1px solid var(--border); margin: 2rem 0;" />
+	{#if !isUserPortal}
+		<hr style="border: none; border-bottom: 1px solid var(--border); margin: 2rem 0;" />
+	{/if}
 
 	{#if canReadAll}
 		<div style="display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem; align-items: start;">
 			<!-- List & Filters -->
 			<section>
 				<div class="card" style="padding: 1rem; margin-bottom: 1.5rem;">
-					<form class="flex gap-4 items-center" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
-						<div style="flex: 1;">
-							<input bind:value={filters.userId} placeholder="User ID..." />
-						</div>
-						<div style="width: 150px;">
+					<form class="enrollment-filters" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
+						<label>
+							<span>User ID</span>
+							<input bind:value={filters.userId} placeholder="Contoh: 24" />
+						</label>
+						<label>
+							<span>Group</span>
+							<select bind:value={filters.groupId}>
+								<option value="">Semua group</option>
+								{#each groups as group}<option value={group.id}>{group.name}</option>{/each}
+							</select>
+						</label>
+						<label>
+							<span>Subject</span>
+							<select bind:value={filters.subjectId}>
+								<option value="">Semua subject</option>
+								{#each subjects as subject}<option value={subject.id}>{subject.name}</option>{/each}
+							</select>
+						</label>
+						<label>
+							<span>Tahun</span>
+							<input bind:value={filters.academicYear} placeholder="2026/2027" />
+						</label>
+						<label>
+							<span>Peran</span>
 							<select bind:value={filters.role}>
 								<option value="">Semua Peran</option>
 								<option value="INSTRUCTOR">Instructor</option>
 								<option value="LEARNER">Learner</option>
 							</select>
-						</div>
+						</label>
+						<label>
+							<span>Urutkan</span>
+							<select bind:value={filters.sortBy}>
+								<option value="id">Terbaru</option>
+								<option value="academicYear">Tahun akademik</option>
+								<option value="role">Peran</option>
+							</select>
+						</label>
+						<label>
+							<span>Arah</span>
+							<select bind:value={filters.sortDirection}>
+								<option value="desc">Turun</option>
+								<option value="asc">Naik</option>
+							</select>
+						</label>
 						<button class="btn btn-primary" type="submit">
-							<Icons name="home" size={18} />
+							<Icons name="search" size={18} />
 							<span>Filter</span>
 						</button>
 					</form>
@@ -249,4 +304,35 @@
 <style>
 	h3 { font-size: 1.125rem; }
 	.flex-direction-column { flex-direction: column; }
+
+	.enrollment-filters {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(130px, 1fr));
+		gap: 0.75rem;
+		align-items: end;
+	}
+
+	.enrollment-filters label {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.enrollment-filters label span {
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+	}
+
+	@media (max-width: 900px) {
+		.enrollment-filters {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 560px) {
+		.enrollment-filters {
+			grid-template-columns: 1fr;
+		}
+	}
 </style>

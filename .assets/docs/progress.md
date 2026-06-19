@@ -24,6 +24,7 @@
 # TODO:
     - frontend:
         - diffrent dashboard contents by user role
+        - nearest schedule follow to user
     - course-service: 
         - weekly report
         - grade and or rank system

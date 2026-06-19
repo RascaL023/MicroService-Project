@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Notice from '$lib/components/Notice.svelte';
 	import Icons from '$lib/components/Icons.svelte';
-	import { api, saveSession } from '$lib/api';
+	import { api, isAdminSession, saveSession } from '$lib/api';
 	import type { LoginData } from '$lib/types';
 	import { fade } from 'svelte/transition';
 
@@ -24,7 +24,9 @@
 			if (!payload.data) throw new Error('Login response kosong.');
 			saveSession(payload.data);
 			success = 'Login berhasil. Selamat datang kembali!';
-			setTimeout(() => window.location.href = '/', 800);
+			setTimeout(() => {
+				window.location.href = isAdminSession(payload.data ?? null) ? '/admin' : '/app';
+			}, 800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Login gagal.';
 		} finally {

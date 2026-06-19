@@ -14,6 +14,12 @@
 	let theme = $state<'light' | 'dark'>('light');
 
 	const themeKey = 'mcr.ui.theme';
+	const isPortalRoute = $derived(
+		page.url.pathname === '/app' ||
+		page.url.pathname.startsWith('/app/') ||
+		page.url.pathname === '/admin' ||
+		page.url.pathname.startsWith('/admin/')
+	);
 
 	const navGroups = $derived.by(() => {
 		const groups = [
@@ -86,7 +92,7 @@
 	});
 
 	$effect(() => {
-		if (!session && !isPublicRoute(page.url.pathname)) {
+		if (!isPortalRoute && !session && !isPublicRoute(page.url.pathname)) {
 			void goto('/login', { replaceState: true });
 		}
 	});
@@ -157,6 +163,9 @@
 	<title>Divdik Course</title>
 </svelte:head>
 
+{#if isPortalRoute}
+	{@render children()}
+{:else}
 <div class="app-shell">
 	<!-- Sidebar -->
 	<aside class="sidebar" class:open={sidebarOpen}>
@@ -255,4 +264,5 @@
 		style="position: fixed; inset: 0; background: var(--bg-overlay); backdrop-filter: blur(4px); z-index: 45;" 
 		onclick={closeSidebar}
 	></div>
+{/if}
 {/if}

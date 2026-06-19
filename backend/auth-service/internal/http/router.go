@@ -59,6 +59,7 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.Post("/passwords/reset", server.completePasswordReset)
 		r.Post("/login", server.login)
 		r.Post("/logout", server.logout)
+		r.With(server.requireAuthenticated).Get("/api/auths/dashboard-summary", server.dashboardSummary)
 	})
 
 	return router
@@ -128,6 +129,11 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writePage(w, http.StatusOK, "Users retrieved successfully", users, page, size, total)
+}
+
+func (s *Server) dashboardSummary(w http.ResponseWriter, r *http.Request) {
+	summary, err := s.userSvc.DashboardSummary(r.Context())
+	respond(w, http.StatusOK, "Dashboard summary retrieved successfully", summary, err)
 }
 
 func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {

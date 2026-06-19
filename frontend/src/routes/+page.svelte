@@ -56,8 +56,8 @@
 				
 				<div class="hero-actions">
 					{#if session}
-						<a href="/groups" class="btn btn-primary btn-lg">
-							<span>Masuk ke Dasbor</span>
+						<a href={isAdminSession(session) ? '/admin' : '/app'} class="btn btn-primary btn-lg">
+							<span>Buka Portal</span>
 							<Icons name="chevronRight" size={18} />
 						</a>
 					{:else}
@@ -146,6 +146,7 @@
 		font-size: 3.5rem;
 		margin-bottom: 1.5rem;
 		background: linear-gradient(135deg, var(--text-main), var(--primary));
+		background-clip: text;
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 	}

@@ -51,6 +51,20 @@ func (s *UserService) List(ctx context.Context, page, size int) ([]response.User
 	return responses, total, nil
 }
 
+func (s *UserService) DashboardSummary(ctx context.Context) (response.DashboardSummaryResponse, error) {
+	total, active, pending, banned, err := s.userRepo.CountByStatus(ctx)
+	if err != nil {
+		return response.DashboardSummaryResponse{}, err
+	}
+
+	return response.DashboardSummaryResponse{
+		TotalUsers:        total,
+		ActiveUsers:       active,
+		PendingActivation: pending,
+		BannedUsers:       banned,
+	}, nil
+}
+
 func (s *UserService) SetManagedRole(ctx context.Context, id int64, req request.UserRoleRequest) (response.UserResponse, error) {
 	roleName := normalizeManagedRole(req.Role)
 	if roleName == "" {
@@ -122,7 +136,9 @@ func normalizeManagedRole(role string) string {
 func managedRoleName(roles []entity.Role) string {
 	for _, role := range roles {
 		name := strings.ToUpper(role.Name)
-		if managedRoles[name] { return name }
+		if managedRoles[name] {
+			return name
+		}
 	}
 	return ""
 }
