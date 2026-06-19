@@ -80,7 +80,8 @@
 					label: 'Materi & Modul',
 					icon: 'book',
 					authorities: ['subject-material.read', 'subject-module.read', 'subject.*']
-				}
+				},
+				{ href: '/admin/reports', label: 'Laporan', icon: 'download', authorities: ['subject.read', 'subject.*'] }
 			]
 		},
 		{

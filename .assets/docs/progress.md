@@ -15,18 +15,14 @@
 
 # LAST:
     - course-service: 
-        - assignment and quiz
-        - meeting system
-    - user-service: 
-        - forgot password
-        - bulk add via file
+        - authority conflict
+        - chief_instructor to add member
 
 # TODO:
     - frontend:
         - diffrent dashboard contents by user role
         - nearest schedule follow to user
     - course-service: 
-        - chief_instructor to add member
         - weekly report
         - grade and or rank system
 

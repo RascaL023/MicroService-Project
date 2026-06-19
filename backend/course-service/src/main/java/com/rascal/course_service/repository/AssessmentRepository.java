@@ -48,4 +48,19 @@ public interface AssessmentRepository extends JpaRepository<Assessment, Long> {
         Pageable pageable
     );
 
+    @Query("""
+        select a
+        from Assessment a
+        where a.deletedAt is null
+            and a.group.deletedAt is null
+            and a.group.academicYear = :academicYear
+            and a.group.subject.id = :subjectId
+        order by a.group.subject.name asc, a.type asc, a.dueAt asc, a.title asc, a.group.name asc
+    """)
+    @EntityGraph(attributePaths = {"group", "group.subject", "groupMeeting", "groupMeeting.subjectMaterial"})
+    List<Assessment> findByAcademicYearAndSubject(
+        @Param("academicYear") String academicYear,
+        @Param("subjectId") Long subjectId
+    );
+
 }

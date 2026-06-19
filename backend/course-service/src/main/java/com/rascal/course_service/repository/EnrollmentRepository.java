@@ -51,4 +51,36 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
         Pageable pageable
     );
 
+    @Query("""
+        select e
+        from Enrollment e
+        where e.deletedAt is null
+            and e.role = :role
+            and e.group.deletedAt is null
+            and e.group.academicYear = :academicYear
+        order by e.group.subject.name asc, e.userId asc, e.group.name asc
+    """)
+    @EntityGraph(attributePaths = {"group", "group.subject"})
+    List<Enrollment> findActiveByAcademicYearAndRole(
+        @Param("academicYear") String academicYear,
+        @Param("role") CourseRoleEnum role
+    );
+
+    @Query("""
+        select e
+        from Enrollment e
+        where e.deletedAt is null
+            and e.role = :role
+            and e.group.deletedAt is null
+            and e.group.academicYear = :academicYear
+            and e.group.subject.id = :subjectId
+        order by e.userId asc, e.group.name asc
+    """)
+    @EntityGraph(attributePaths = {"group", "group.subject"})
+    List<Enrollment> findActiveByAcademicYearSubjectAndRole(
+        @Param("academicYear") String academicYear,
+        @Param("subjectId") Long subjectId,
+        @Param("role") CourseRoleEnum role
+    );
+
 }

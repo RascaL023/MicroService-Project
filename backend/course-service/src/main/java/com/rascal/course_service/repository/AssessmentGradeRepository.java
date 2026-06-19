@@ -31,4 +31,16 @@ public interface AssessmentGradeRepository extends JpaRepository<AssessmentGrade
         @Param("userIds") Collection<Long> userIds
     );
 
+    @Query("""
+        select g
+        from AssessmentGrade g
+        where g.assessment.id in :assessmentIds
+            and g.userId in :userIds
+    """)
+    @EntityGraph(attributePaths = {"assessment", "assessment.group"})
+    List<AssessmentGrade> findByAssessmentIdInAndUserIdIn(
+        @Param("assessmentIds") Collection<Long> assessmentIds,
+        @Param("userIds") Collection<Long> userIds
+    );
+
 }
