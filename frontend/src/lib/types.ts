@@ -73,6 +73,7 @@ export type AuthUser = {
 	id: number;
 	email: string;
 	status: string;
+	lastLogin?: string | null;
 	roles: string[];
 };
 

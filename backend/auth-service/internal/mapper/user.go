@@ -10,5 +10,11 @@ func ToUserResponse(user entity.User) response.UserResponse {
 	for _, role := range user.Roles {
 		roles = append(roles, role.Name)
 	}
-	return response.UserResponse{ID: user.ID, Email: user.Email, Status: user.Status, Roles: roles}
+	return response.UserResponse{
+		ID:        user.ID,
+		Email:     user.Email,
+		Status:    user.Status,
+		LastLogin: user.LastLogin,
+		Roles:     roles,
+	}
 }

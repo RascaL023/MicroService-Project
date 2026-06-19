@@ -1,4 +1,7 @@
 # LAST:
+    - course-service:
+        - detail button to popup detail and edit (FE)
+        - last login
     - frontend:
         - cleaning UI to button first
         - toast notification/confirmation
@@ -8,9 +11,6 @@
         - nearest schedule follow to user
 
 # PENDING:
-    - auth-service:
-        - last login
-        - detail button to popup detail and edit (FE)
     - course-service: 
         - gradebook better call
         - subject search (FE)
@@ -19,14 +19,17 @@
         - diffrent dashboard contents by user role
         - designing better UX and cleaner UI
     - user-service: 
-        - profile page
-        - status = ACTIVE/GRADUATED
-        - nearest schedule follow to user
-        - search users
+        - profile page:
+            - CRUD allowed
+            - status = ACTIVE/GRADUATED
         - more user data
         - better excel import template
 
 # TODO:
+    - frontend: 
+        - 2nd password input on new password, toggle show password
+    - auth-service:
+        - after activation, need manual login
     - course-service:
         - learner ack assessments
 

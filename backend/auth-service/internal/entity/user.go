@@ -8,6 +8,7 @@ type User struct {
 	HashPassword    *string
 	Status          string
 	EmailVerifiedAt *time.Time
+	LastLogin       *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       *time.Time
 	DeletedAt       *time.Time

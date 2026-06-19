@@ -44,13 +44,14 @@ func (r *UserRepository) CreateBootstrapAdmin(ctx context.Context, id int64, ema
 		VALUES ($1, $2, $3, $4, now(), now())
 		ON CONFLICT (id) DO UPDATE
 		SET email=$2, updated_at=now()
-		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+		RETURNING id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 	`, id, email, hashPassword, AccountActive).Scan(
 		&user.ID,
 		&user.Email,
 		&user.HashPassword,
 		&user.Status,
 		&user.EmailVerifiedAt,
+		&user.LastLogin,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.DeletedAt,
@@ -107,13 +108,14 @@ func (r *UserRepository) Provision(ctx context.Context, userID int64, email stri
 			END,
 			updated_at=now(),
 			deleted_at=NULL
-		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+		RETURNING id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 	`, userID, email, status).Scan(
 		&user.ID,
 		&user.Email,
 		&user.HashPassword,
 		&user.Status,
 		&user.EmailVerifiedAt,
+		&user.LastLogin,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.DeletedAt,
@@ -150,7 +152,7 @@ func (r *UserRepository) UpdateEmail(ctx context.Context, userID int64, email st
 		SET email=$2, updated_at=now(),
 		email_verified_at=NULL, status=$3, hash_password=NULL
 		WHERE id=$1 AND deleted_at IS NULL
-		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+		RETURNING id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 	`, userID, email, AccountPendingActivation)
 	if err != nil {
 		if isDuplicate(err) {
@@ -183,7 +185,7 @@ func (r *UserRepository) SetActivatedPassword(ctx context.Context, id int64, has
 		UPDATE users
 		SET hash_password=$2, status=$3, email_verified_at=COALESCE(email_verified_at, now()), updated_at=now()
 		WHERE id=$1 AND deleted_at IS NULL
-		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+		RETURNING id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 	`, id, hashPassword, AccountActive)
 }
 
@@ -192,7 +194,7 @@ func (r *UserRepository) SetPassword(ctx context.Context, id int64, hashPassword
 		UPDATE users
 		SET hash_password=$2, updated_at=now()
 		WHERE id=$1 AND status=$3 AND deleted_at IS NULL
-		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+		RETURNING id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 	`, id, hashPassword, AccountActive)
 }
 
@@ -206,13 +208,22 @@ func (r *UserRepository) SetStatus(ctx context.Context, id int64, status string)
 			END,
 			updated_at=now()
 		WHERE id=$1 AND deleted_at IS NULL
-		RETURNING id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+		RETURNING id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 	`, id, status)
 	if err != nil {
 		return entity.User{}, err
 	}
 
 	return user, nil
+}
+
+func (r *UserRepository) TouchLastLogin(ctx context.Context, id int64) (entity.User, error) {
+	return r.findOneReturning(ctx, `
+		UPDATE users
+		SET last_login=now(), updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL
+		RETURNING id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
+	`, id)
 }
 
 func (r *UserRepository) SetManagedRole(ctx context.Context, userID, roleID int64) (entity.User, error) {
@@ -313,7 +324,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 	}
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, email, hash_password, status, email_verified_at, created_at, updated_at, deleted_at
+		SELECT id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 		FROM users
 	WHERE deleted_at IS NULL
 	ORDER BY id
@@ -333,6 +344,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.
 			&user.HashPassword,
 			&user.Status,
 			&user.EmailVerifiedAt,
+			&user.LastLogin,
 			&user.CreatedAt,
 			&user.UpdatedAt,
 			&user.DeletedAt,
@@ -369,7 +381,7 @@ func (r *UserRepository) CountByStatus(ctx context.Context) (total, active, pend
 
 func (r *UserRepository) findOne(ctx context.Context, where string, arg any) (entity.User, error) {
 	return r.findOneReturning(ctx, `
-		SELECT u.id, u.email, u.hash_password, u.status, u.email_verified_at, u.created_at, u.updated_at, u.deleted_at
+		SELECT u.id, u.email, u.hash_password, u.status, u.email_verified_at, u.last_login, u.created_at, u.updated_at, u.deleted_at
 		FROM users u
 		`+where, arg)
 }
@@ -382,6 +394,7 @@ func (r *UserRepository) findOneReturning(ctx context.Context, query string, arg
 		&user.HashPassword,
 		&user.Status,
 		&user.EmailVerifiedAt,
+		&user.LastLogin,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 		&user.DeletedAt,

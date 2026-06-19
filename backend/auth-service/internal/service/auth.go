@@ -296,6 +296,11 @@ func (s *AuthService) Authenticate(ctx context.Context, authHeader string) (enti
 }
 
 func (s *AuthService) createSession(ctx context.Context, user entity.User) (response.LoginResponse, error) {
+	user, err := s.users.TouchLastLogin(ctx, user.ID)
+	if err != nil {
+		return response.LoginResponse{}, err
+	}
+
 	roles, permissions := collectGrants(user)
 	sessionID, err := generateRandomToken()
 	if err != nil {

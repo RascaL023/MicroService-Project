@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
 	hash_password TEXT,
 	status TEXT NOT NULL DEFAULT 'PENDING_ACTIVATION',
 	email_verified_at TIMESTAMPTZ,
+	last_login TIMESTAMPTZ,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 	updated_at TIMESTAMPTZ,
 	deleted_at TIMESTAMPTZ,

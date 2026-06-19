@@ -13,6 +13,9 @@
 	let users = $state<AuthUser[]>([]);
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let session = $state<LoginData | null>(null);
+	let selectedUser = $state<AuthUser | null>(null);
+	let selectedRole = $state('');
+	let showManage = $state(false);
 	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
 	let pendingConfirm: (() => Promise<void>) | null = null;
 	let error = $state('');
@@ -20,7 +23,9 @@
 	let busy = $state('');
 
 	const managedRoles = ['CHIEF', 'CHIEF_DEPUTY', 'CHIEF_INSTRUCTOR', 'CHIEF_DEPUTY_INSTRUCTOR'];
-	const canManageRoles = $derived(hasAnyAuthority(session, ['user.*']));
+	const canUpdateAuth = $derived(hasAnyAuthority(session, ['user.update', 'user.*']));
+	const canDemoteRole = $derived(hasAnyAuthority(session, ['user.delete', 'user.*']));
+	const canManageAuth = $derived(canUpdateAuth || canDemoteRole);
 
 	onMount(() => {
 		session = readSession();
@@ -55,6 +60,7 @@
 					})
 				});
 				await load();
+				closeManage();
 				success = status === 'BANNED' ? 'Akun berhasil diblokir.' : 'Akun berhasil diaktifkan.';
 			} finally {
 				busy = '';
@@ -62,8 +68,8 @@
 		});
 	}
 
-	async function setManagedRole(user: AuthUser, role: string) {
-		if (!role || hasRole(user, 'ADMIN')) return;
+	async function setManagedRole(user: AuthUser, role: string = selectedRole) {
+		if (!role || hasRole(user, 'ADMIN') || !canUpdateAuth) return;
 		await submit(async () => {
 			busy = `role-${user.id}`;
 			try {
@@ -72,6 +78,7 @@
 					body: JSON.stringify({ role })
 				});
 				await load();
+				closeManage();
 				success = `Role ${user.email} berhasil diubah.`;
 			} finally {
 				busy = '';
@@ -80,7 +87,7 @@
 	}
 
 	async function demoteRole(user: AuthUser) {
-		if (hasRole(user, 'ADMIN')) return;
+		if (hasRole(user, 'ADMIN') || !canDemoteRole) return;
 
 		askConfirm({
 			title: 'Turunkan role?',
@@ -92,12 +99,28 @@
 				try {
 					await api<AuthUser>(`/api/auths/users/${user.id}/role`, { method: 'DELETE' });
 					await load();
+					closeManage();
 					success = `Role ${user.email} berhasil diturunkan ke USER.`;
 				} finally {
 					busy = '';
 				}
 			});
 		});
+	}
+
+	function requestStatusChange(user: AuthUser, status: 'ACTIVE' | 'BANNED') {
+		if (status === 'BANNED') {
+			askConfirm({
+				title: 'Blokir akun?',
+				message: `Akun ${user.email} akan diblokir dan session aktif akan dicabut.`,
+				confirmLabel: 'Blokir Akun'
+			}, async () => {
+				await updateStatus(user, status);
+			});
+			return;
+		}
+
+		void updateStatus(user, status);
 	}
 
 	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
@@ -122,6 +145,28 @@
 
 	function currentManagedRole(user: AuthUser) {
 		return (user.roles ?? []).find((role) => managedRoles.includes(role.toUpperCase())) ?? '';
+	}
+
+	function openManage(user: AuthUser) {
+		selectedUser = user;
+		selectedRole = currentManagedRole(user);
+		showManage = true;
+	}
+
+	function closeManage() {
+		showManage = false;
+		selectedUser = null;
+		selectedRole = '';
+	}
+
+	function lastLoginLabel(value?: string | null) {
+		if (!value) return 'Belum pernah login';
+		const parsed = new Date(value);
+		if (Number.isNaN(parsed.getTime())) return '-';
+		return new Intl.DateTimeFormat('id-ID', {
+			dateStyle: 'medium',
+			timeStyle: 'short'
+		}).format(parsed);
 	}
 
 	function changePage(page: number) {
@@ -150,9 +195,7 @@
 					<th>Identity Email</th>
 					<th>Status</th>
 					<th>Roles</th>
-					{#if canManageRoles}
-						<th>Adjust Role</th>
-					{/if}
+					<th>Last Login</th>
 					<th class="text-right">Aksi</th>
 				</tr>
 			</thead>
@@ -160,69 +203,145 @@
 				{#each users as user}
 					<tr>
 						<td><small>#{user.id}</small></td>
-						<td><strong>{user.email}</strong></td>
+						<td>
+							<div class="identity-cell">
+								<div class="avatar">{user.email.charAt(0).toUpperCase()}</div>
+								<div>
+									<strong>{user.email}</strong>
+									<small>Auth identity</small>
+								</div>
+							</div>
+						</td>
 						<td>
 							<span class="badge" class:badge-green={user.status === 'ACTIVE'} class:badge-red={user.status === 'BANNED'} class:badge-gray={user.status !== 'ACTIVE' && user.status !== 'BANNED'}>
 								{user.status}
 							</span>
 						</td>
 						<td>
-							<div class="flex gap-1" style="flex-wrap: wrap;">
+							<div class="role-list">
 								{#each user.roles || [] as role}
-									<span class="badge badge-blue" style="font-size: 0.65rem;">{role}</span>
+									<span class="badge badge-blue role-badge">{role}</span>
 								{/each}
 							</div>
 						</td>
-						{#if canManageRoles}
-							<td>
-								{#if hasRole(user, 'ADMIN')}
-									<span class="badge badge-gray">Protected</span>
-								{:else}
-									<div class="role-tools">
-										<select
-											value={currentManagedRole(user)}
-											disabled={busy === `role-${user.id}` || busy === `demote-${user.id}`}
-											onchange={(event) => void setManagedRole(user, (event.currentTarget as HTMLSelectElement).value)}
-										>
-											<option value="">USER only</option>
-											{#each managedRoles as role}
-												<option value={role}>{role}</option>
-											{/each}
-										</select>
-										<button
-											class="btn btn-ghost"
-											type="button"
-											disabled={!currentManagedRole(user) || busy === `demote-${user.id}`}
-											onclick={() => void demoteRole(user)}
-										>
-											Demote
-										</button>
-									</div>
-								{/if}
-							</td>
-						{/if}
+						<td><span class="muted-date">{lastLoginLabel(user.lastLogin)}</span></td>
 						<td class="text-right">
-							{#if user.status === 'BANNED'}
-								<button class="btn btn-ghost" disabled={busy === `ACTIVE-${user.id}`} onclick={() => void updateStatus(user, 'ACTIVE')}>
-									<Icons name="check" size={16} />
-									<span>Aktifkan</span>
+							{#if canManageAuth && !hasRole(user, 'ADMIN')}
+								<button class="btn btn-secondary" type="button" onclick={() => openManage(user)}>
+									<Icons name="edit" size={16} />
+									<span>Kelola</span>
 								</button>
+							{:else if hasRole(user, 'ADMIN')}
+								<span class="badge badge-gray">Protected</span>
 							{:else}
-								<button class="btn btn-ghost" style="color: var(--error);" disabled={busy === `BANNED-${user.id}`} onclick={() => void updateStatus(user, 'BANNED')}>
-									<Icons name="x" size={16} />
-									<span>Blokir</span>
-								</button>
+								<span class="muted-date">Read only</span>
 							{/if}
 						</td>
 					</tr>
 				{:else}
-					<tr><td colspan={canManageRoles ? 6 : 5}><EmptyState text="Belum ada identitas auth." /></td></tr>
+					<tr><td colspan="6"><EmptyState text="Belum ada identitas auth." /></td></tr>
 				{/each}
 			</tbody>
 		</table>
 	</div>
 	<Pagination meta={pageMeta} onPage={changePage} onSize={changePageSize} />
 </AccessPanel>
+
+{#if showManage && selectedUser}
+	<div class="modal-backdrop" role="presentation" onclick={closeManage}>
+		<section
+			class="modal-panel manage-panel"
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			onclick={(event) => event.stopPropagation()}
+			onkeydown={(event) => event.stopPropagation()}
+		>
+			<div class="modal-head">
+				<div>
+					<span class="modal-eyebrow">Auth Identity</span>
+					<h3>Kelola Akun</h3>
+					<p>{selectedUser.email}</p>
+				</div>
+				<button class="btn btn-ghost icon-button" aria-label="Tutup modal" type="button" onclick={closeManage}>
+					<Icons name="x" size={18} />
+				</button>
+			</div>
+
+			<div class="account-summary">
+				<div>
+					<span>Status</span>
+					<strong>{selectedUser.status}</strong>
+				</div>
+				<div>
+					<span>Last Login</span>
+					<strong>{lastLoginLabel(selectedUser.lastLogin)}</strong>
+				</div>
+				<div>
+					<span>Roles</span>
+					<strong>{(selectedUser.roles ?? []).join(', ') || '-'}</strong>
+				</div>
+			</div>
+
+			{#if canUpdateAuth}
+				<section class="manage-section">
+					<div>
+						<h4>Status Akun</h4>
+						<p>Blokir akan mencabut session aktif. Aktifkan akan membuka akses login kembali.</p>
+					</div>
+					<div class="manage-actions">
+						{#if selectedUser.status === 'BANNED'}
+							<button class="btn btn-primary" disabled={busy === `ACTIVE-${selectedUser.id}`} type="button" onclick={() => requestStatusChange(selectedUser!, 'ACTIVE')}>
+								<Icons name="checkCircle" size={16} />
+								Aktifkan
+							</button>
+						{:else}
+							<button class="btn btn-ghost danger-action" disabled={busy === `BANNED-${selectedUser.id}`} type="button" onclick={() => requestStatusChange(selectedUser!, 'BANNED')}>
+								<Icons name="x" size={16} />
+								Blokir Akun
+							</button>
+						{/if}
+					</div>
+				</section>
+
+				<section class="manage-section">
+					<div>
+						<h4>Ganti Role</h4>
+						<p>Pilih role manajerial. Role USER tetap menjadi default dasar.</p>
+					</div>
+					<div class="role-editor">
+						<select bind:value={selectedRole} disabled={busy === `role-${selectedUser.id}`}>
+							<option value="">USER only</option>
+							{#each managedRoles as role}
+								<option value={role}>{role}</option>
+							{/each}
+						</select>
+						<button class="btn btn-primary" disabled={!selectedRole || busy === `role-${selectedUser.id}`} type="button" onclick={() => void setManagedRole(selectedUser!)}>
+							Simpan Role
+						</button>
+					</div>
+				</section>
+			{/if}
+
+			{#if canDemoteRole}
+				<section class="manage-section danger-section">
+					<div>
+						<h4>Turunkan Role</h4>
+						<p>Hapus role manajerial dan sisakan USER sebagai role dasar.</p>
+					</div>
+					<button
+						class="btn btn-ghost danger-action"
+						type="button"
+						disabled={!currentManagedRole(selectedUser) || busy === `demote-${selectedUser.id}`}
+						onclick={() => void demoteRole(selectedUser!)}
+					>
+						Demote ke USER
+					</button>
+				</section>
+			{/if}
+		</section>
+	</div>
+{/if}
 
 <ConfirmModal
 	open={confirmState.open}
@@ -238,22 +357,140 @@
 		white-space: nowrap;
 	}
 
-	.role-tools {
-		display: grid;
-		grid-template-columns: minmax(180px, 1fr) auto;
-		gap: 0.5rem;
+	.identity-cell {
+		display: flex;
 		align-items: center;
-		min-width: 260px;
+		gap: 0.85rem;
+		min-width: 240px;
 	}
 
-	.role-tools select {
-		min-width: 0;
+	.identity-cell > div:last-child {
+		display: grid;
+		gap: 0.15rem;
+	}
+
+	.avatar {
+		width: 38px;
+		height: 38px;
+		display: grid;
+		place-items: center;
+		border-radius: 12px;
+		background: var(--primary-soft);
+		color: var(--primary);
+		font-weight: 900;
+		border: 1px solid var(--primary-border);
+	}
+
+	.role-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		max-width: 360px;
+	}
+
+	.role-badge {
+		font-size: 0.65rem;
+	}
+
+	.muted-date {
+		color: var(--text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+
+	.manage-panel {
+		width: min(760px, 100%);
+	}
+
+	.icon-button {
+		width: 38px;
+		height: 38px;
+		padding: 0;
+	}
+
+	.modal-eyebrow {
+		color: var(--primary);
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.account-summary {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.75rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.account-summary > div {
+		display: grid;
+		gap: 0.25rem;
+		padding: 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-app);
+	}
+
+	.account-summary span {
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+	}
+
+	.account-summary strong {
+		font-size: 0.86rem;
+		overflow-wrap: anywhere;
+	}
+
+	.manage-section {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);
+		gap: 1rem;
+		align-items: center;
+		padding: 1rem 0;
+		border-top: 1px solid var(--border-light);
+	}
+
+	.manage-section h4 {
+		font-size: 0.98rem;
+	}
+
+	.manage-section p {
+		margin-top: 0.25rem;
+		font-size: 0.84rem;
+	}
+
+	.manage-actions,
+	.role-editor {
+		display: grid;
+		gap: 0.65rem;
+	}
+
+	.danger-section {
+		align-items: start;
+	}
+
+	.danger-action {
+		color: var(--error);
+		border-color: var(--error-border);
+		background: var(--error-soft);
+	}
+
+	.danger-action:hover {
+		color: var(--error-strong);
+		background: var(--error-soft);
 	}
 
 	@media (max-width: 820px) {
-		.role-tools {
-			min-width: 220px;
+		.account-summary,
+		.manage-section {
 			grid-template-columns: 1fr;
+		}
+
+		.identity-cell {
+			min-width: 200px;
 		}
 	}
 </style>
