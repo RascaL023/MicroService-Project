@@ -18,13 +18,11 @@
         - gradebook better call
         - subject search (FE)
         - rank system
-    - frontend: 
-        - diffrent dashboard contents by user role
-        - designing better UX and cleaner UI
     - user-service: 
         - profile page:
             - CRUD allowed
             - status = ACTIVE/GRADUATED
+            - user profile picture
         - more user data
         - better excel import template
 

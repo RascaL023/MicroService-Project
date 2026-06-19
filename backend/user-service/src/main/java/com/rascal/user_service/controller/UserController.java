@@ -23,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.rascal.user_service.dto.mapper.UserMapper;
 import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
+import com.rascal.user_service.dto.response.UserDetailResponse;
 import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.service.UserBulkImportService;
@@ -86,7 +87,7 @@ public class UserController {
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return ApiResponse.success(
             HttpStatus.OK, 
-            UserMapper.toResponse(userService.getById(id))
+            UserMapper.toDetailResponse(userService.getById(id))
         );
     }
 
@@ -118,7 +119,10 @@ public class UserController {
     @PatchMapping("/{id}")
     @PreAuthorize("""
         hasAuthority('user.*') or (
-            #id == authentication.name and #request.batch == null and #request.gender == null
+            #id == authentication.name and 
+            #request.batch == null and 
+            #request.gender == null and 
+            #request.name == null
         )
     """
     ) public ResponseEntity<?> patchById(

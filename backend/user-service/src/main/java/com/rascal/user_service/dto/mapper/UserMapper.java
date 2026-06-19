@@ -1,5 +1,6 @@
 package com.rascal.user_service.dto.mapper;
 
+import com.rascal.user_service.dto.response.UserDetailResponse;
 import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.entity.Batch;
@@ -25,6 +26,24 @@ public final class UserMapper {
         );
 
     }
+
+    public static UserDetailResponse toDetailResponse(User user) {
+        Batch batch = user.getBatch();
+        String batchName = batch.getName() != null && !batch.getName().isBlank() ?
+            batch.getId().toString() + " - " + batch.getName() : batch.getId().toString();
+
+        return new UserDetailResponse(
+            user.getId(),
+            user.getName(),
+            user.getEmail(),
+            batchName,
+            user.getGender() == 'L' ?
+                "Laki - laki" : "Perempuan",
+            user.getStatus(),
+            user.getCreatedAt()
+        );
+    }
+
 
     public static UserLookupResponse toLookupResponse(User user) {
         return new UserLookupResponse(
