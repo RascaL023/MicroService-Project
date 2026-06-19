@@ -90,10 +90,8 @@ export type UserDashboardSummary = {
 
 export type CourseDashboardSummary = {
 	activeGroups: number;
-	passedGroups: number;
 	subjects: number;
 	instructors: number;
-	learners: number;
 	groupsWithoutInstructor: number;
 	groupsWithoutSchedule: number;
 };

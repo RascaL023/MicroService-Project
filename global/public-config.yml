@@ -56,7 +56,7 @@ notification:
     starttls: false
     starttls_required: false
     ssl: true
-    debug: false
+    debug: true
     connection_timeout_ms: 10000
     timeout_ms: 10000
     write_timeout_ms: 10000

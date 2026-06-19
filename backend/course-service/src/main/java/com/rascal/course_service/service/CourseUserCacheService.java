@@ -27,7 +27,7 @@ public class CourseUserCacheService {
     public Map<Long, UserLookupResponse> lookupByIds(Collection<Long> userIds) {
         if (userIds == null || userIds.isEmpty()) return Map.of();
 
-        return courseUserCacheRepository.findByIdInAndDeletedAtIsNull(userIds)
+        return courseUserCacheRepository.findByIdIn(userIds)
             .stream()
             .map(this::toLookupResponse)
             .collect(Collectors.toMap(

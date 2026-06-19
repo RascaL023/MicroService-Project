@@ -23,9 +23,6 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
             COUNT(*) FILTER (
                 WHERE g.deleted_at IS NULL AND g.status = 'ON_GOING'
             ) AS "activeGroups",
-            COUNT(*) FILTER (
-                WHERE g.deleted_at IS NULL AND g.status = 'PASSED'
-            ) AS "passedGroups",
             (
                 SELECT COUNT(*)
                 FROM subjects s
@@ -40,15 +37,6 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
                     AND eg.status = 'ON_GOING'
                     AND e.role = 'INSTRUCTOR'
             ) AS "instructors",
-            (
-                SELECT COUNT(DISTINCT e.user_id)
-                FROM enrollments e
-                JOIN groups eg ON eg.id = e.group_id
-                WHERE e.deleted_at IS NULL
-                    AND eg.deleted_at IS NULL
-                    AND eg.status = 'ON_GOING'
-                    AND e.role = 'LEARNER'
-            ) AS "learners",
             COUNT(*) FILTER (
                 WHERE g.deleted_at IS NULL
                     AND g.status = 'ON_GOING'

@@ -26,5 +26,9 @@
         - diffrent dashboard contents by user role
         - nearest schedule follow to user
     - course-service: 
+        - chief_instructor to add member
         - weekly report
         - grade and or rank system
+
+# ??
+    - deleted user on group member response mark deleted or just show

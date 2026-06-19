@@ -2,13 +2,11 @@
 	import { onMount } from 'svelte';
 	import Icons from '$lib/components/Icons.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { api, hasAnyAuthority, pageItems, readSession } from '$lib/api';
+	import { api, hasAnyAuthority, readSession } from '$lib/api';
 	import type {
 		AuthDashboardSummary,
 		CourseDashboardSummary,
-		Group,
 		LoginData,
-		PageData,
 		UserDashboardSummary
 	} from '$lib/types';
 
@@ -16,7 +14,6 @@
 	let authSummary = $state<AuthDashboardSummary | null>(null);
 	let userSummary = $state<UserDashboardSummary | null>(null);
 	let courseSummary = $state<CourseDashboardSummary | null>(null);
-	let groups = $state<Group[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let unavailable = $state<string[]>([]);
@@ -58,7 +55,6 @@
 				'operasional akademik',
 				(value) => courseSummary = value
 			));
-			tasks.push(loadRecentGroups());
 		}
 
 		await Promise.all(tasks);
@@ -74,17 +70,6 @@
 			if (payload.data) assign(payload.data);
 		} catch {
 			unavailable = [...unavailable, label];
-		}
-	}
-
-	async function loadRecentGroups() {
-		try {
-			const payload = await api<PageData<Group> | Group[]>(
-				'/api/groups?status=ON_GOING&page=0&size=5&sort=id,desc'
-			);
-			groups = pageItems(payload);
-		} catch {
-			unavailable = [...unavailable, 'group terbaru'];
 		}
 	}
 
@@ -182,20 +167,12 @@
 					<div><span>Instruktur</span><strong>{courseSummary?.instructors ?? '-'}</strong></div>
 				</article>
 				<article class="metric-card">
-					<div class="metric-icon green"><Icons name="users" size={20} /></div>
-					<div><span>Learner</span><strong>{courseSummary?.learners ?? '-'}</strong></div>
-				</article>
-				<article class="metric-card">
 					<div class="metric-icon amber"><Icons name="book" size={20} /></div>
 					<div><span>Subject</span><strong>{courseSummary?.subjects ?? '-'}</strong></div>
 				</article>
 				<article class="metric-card">
 					<div class="metric-icon blue"><Icons name="layers" size={20} /></div>
 					<div><span>Batch</span><strong>{userSummary?.totalBatches ?? '-'}</strong></div>
-				</article>
-				<article class="metric-card">
-					<div class="metric-icon green"><Icons name="checkCircle" size={20} /></div>
-					<div><span>Group Selesai</span><strong>{courseSummary?.passedGroups ?? '-'}</strong></div>
 				</article>
 			</div>
 		</section>
@@ -207,11 +184,6 @@
 				<div><span>Needs Attention</span><h2>Perlu Ditindaklanjuti</h2></div>
 			</div>
 			<div class="attention-list">
-				<a href="/admin/auth">
-					<div class="attention-icon amber"><Icons name="clock" size={18} /></div>
-					<div><strong>Aktivasi tertunda</strong><span>User belum menyelesaikan aktivasi akun.</span></div>
-					<b>{authSummary?.pendingActivation ?? '-'}</b>
-				</a>
 				<a href="/admin/groups">
 					<div class="attention-icon red"><Icons name="users" size={18} /></div>
 					<div><strong>Group tanpa instruktur</strong><span>Group aktif belum memiliki pengajar.</span></div>
@@ -221,11 +193,6 @@
 					<div class="attention-icon amber"><Icons name="calendar" size={18} /></div>
 					<div><strong>Group tanpa jadwal</strong><span>Group aktif belum mempunyai jadwal.</span></div>
 					<b>{courseSummary?.groupsWithoutSchedule ?? '-'}</b>
-				</a>
-				<a href="/admin/auth">
-					<div class="attention-icon red"><Icons name="shield" size={18} /></div>
-					<div><strong>Akun banned</strong><span>Akun yang sedang dibatasi aksesnya.</span></div>
-					<b>{authSummary?.bannedUsers ?? '-'}</b>
 				</a>
 			</div>
 		</div>
@@ -254,26 +221,6 @@
 		</div>
 	</section>
 
-	{#if canReadGroups}
-		<section class="panel recent-groups">
-			<div class="panel-head">
-				<div><span>Recent Activity</span><h2>Group Aktif Terbaru</h2></div>
-				<a href="/admin/groups">Lihat semua</a>
-			</div>
-			<div class="group-table">
-				{#each groups as group}
-					<a href={`/admin/groups/${group.id}`}>
-						<div><strong>{group.name}</strong><span>{group.subjectName}</span></div>
-						<span>{group.academicYear}</span>
-						<span class="badge badge-blue">{group.status}</span>
-						<Icons name="chevronRight" size={16} />
-					</a>
-				{:else}
-					<p>Belum ada group aktif.</p>
-				{/each}
-			</div>
-		</section>
-	{/if}
 {/if}
 
 <style>
@@ -424,16 +371,8 @@
 		margin-bottom: 0.75rem;
 	}
 
-	.panel-head > a {
-		color: var(--primary);
-		font-size: 0.78rem;
-		font-weight: 800;
-		text-decoration: none;
-	}
-
 	.attention-list,
-	.quick-actions,
-	.group-table {
+	.quick-actions {
 		display: grid;
 	}
 
@@ -458,21 +397,18 @@
 	}
 
 	.attention-list a > div:nth-child(2),
-	.quick-actions a > div,
-	.group-table a > div {
+	.quick-actions a > div {
 		display: grid;
 		min-width: 0;
 	}
 
 	.attention-list strong,
-	.quick-actions strong,
-	.group-table strong {
+	.quick-actions strong {
 		font-size: 0.82rem;
 	}
 
 	.attention-list span,
-	.quick-actions span,
-	.group-table span {
+	.quick-actions span {
 		color: var(--text-muted);
 		font-size: 0.72rem;
 	}
@@ -502,21 +438,6 @@
 		border-color: var(--primary-border);
 		background: var(--primary-soft);
 		color: var(--primary);
-	}
-
-	.group-table a {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) 130px 100px auto;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 0;
-		border-top: 1px solid var(--border-light);
-		color: inherit;
-		text-decoration: none;
-	}
-
-	.group-table a:first-child {
-		border-top: 0;
 	}
 
 	.loading-grid {
@@ -566,12 +487,5 @@
 			display: grid;
 		}
 
-		.group-table a {
-			grid-template-columns: 1fr auto;
-		}
-
-		.group-table a > span:first-of-type {
-			display: none;
-		}
 	}
 </style>

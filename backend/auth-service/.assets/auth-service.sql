@@ -109,8 +109,8 @@ SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
     'course.*', 'group.*', 'group-schedule.*',
-    'subject.*', 'subject-material.*',
-    'subject-module.*'
+    'subject.*', 'subject-material.*', 'subject-module.*',
+    'enrollment.*'
 ) WHERE r.name = 'CHIEF_INSTRUCTOR'
 ON CONFLICT DO NOTHING;
 
@@ -119,11 +119,12 @@ SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
     'course.update', 'group.update', 'group-schedule.update',
-    'subject.update', 'subject-material.update',
-    'subject-module.update',
+    'subject.update', 'subject-material.update', 'subject-module.update',
+    'enrollment.update',
+
     'course.delete', 'group.delete', 'group-schedule.delete',
-    'subject.delete', 'subject-material.delete',
-    'subject-module.delete'
+    'subject.delete', 'subject-material.delete', 'subject-module.delete',
+    'enrollment.delete'
 ) WHERE r.name = 'CHIEF_DEPUTY_INSTRUCTOR'
 ON CONFLICT DO NOTHING;
 

@@ -9,7 +9,8 @@ import com.rascal.course_service.entity.CourseUserCache;
 
 public interface CourseUserCacheRepository extends JpaRepository<CourseUserCache, Long> {
 
-    List<CourseUserCache> findByIdInAndDeletedAtIsNull(Collection<Long> ids);
+    // List<CourseUserCache> findByIdInAndDeletedAtIsNull(Collection<Long> ids);
+    List<CourseUserCache> findByIdIn(Collection<Long> ids);
     boolean existsByIdAndDeletedAtIsNull(Long id);
 
 }

@@ -22,10 +22,8 @@ public class CourseDashboardService {
 
         return new CourseDashboardSummaryResponse(
             summary.getActiveGroups(),
-            summary.getPassedGroups(),
             summary.getSubjects(),
             summary.getInstructors(),
-            summary.getLearners(),
             summary.getGroupsWithoutInstructor(),
             summary.getGroupsWithoutSchedule()
         );
