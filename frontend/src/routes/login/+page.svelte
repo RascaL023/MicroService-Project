@@ -8,6 +8,7 @@
 	let mode = $state<'login' | 'activate' | 'forgot'>('login');
 	let email = $state('');
 	let password = $state('');
+	let showPassword = $state(false);
 	let activationEmail = $state('');
 	let resetEmail = $state('');
 	let busy = $state(false);
@@ -100,7 +101,10 @@
 					<label for="password">Password</label>
 					<div class="input-with-icon">
 						<Icons name="shield" size={18} />
-						<input bind:value={password} id="password" type="password" placeholder="••••••••" required />
+						<input bind:value={password} id="password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" required />
+						<button type="button" class="toggle-password" onclick={() => showPassword = !showPassword}>
+							<Icons name={showPassword ? 'eyeOff' : 'eye'} size={18} />
+						</button>
 					</div>
 				</div>
 				<button class="btn btn-primary w-full" disabled={busy} type="submit">
@@ -232,7 +236,7 @@
 		position: relative;
 	}
 
-	.input-with-icon :global(svg) {
+	.input-with-icon > :global(svg) {
 		position: absolute;
 		left: 1rem;
 		top: 50%;
@@ -242,6 +246,22 @@
 
 	.input-with-icon input {
 		padding-left: 2.75rem;
+		padding-right: 2.75rem;
+	}
+
+	.toggle-password {
+		position: absolute;
+		right: 1rem;
+		top: 50%;
+		transform: translateY(-50%);
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--text-light);
+		padding: 0;
+		display: flex;
+		align-items: center;
+		z-index: 10;
 	}
 
 	.activation-info {

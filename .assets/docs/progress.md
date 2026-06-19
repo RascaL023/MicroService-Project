@@ -1,8 +1,11 @@
 # LAST:
+    - auth-service:
+        - after activation, need manual login
     - course-service:
         - detail button to popup detail and edit (FE)
         - last login
     - frontend:
+        - 2nd password input on new password, toggle show password
         - cleaning UI to button first
         - toast notification/confirmation
         - delete kursus saya in /enrollments
@@ -26,10 +29,6 @@
         - better excel import template
 
 # TODO:
-    - frontend: 
-        - 2nd password input on new password, toggle show password
-    - auth-service:
-        - after activation, need manual login
     - course-service:
         - learner ack assessments
 

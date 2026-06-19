@@ -14,7 +14,7 @@
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let session = $state<LoginData | null>(null);
 	let name = $state('');
-	let patchId = $state('');
+	let selectedSubject = $state<Subject | null>(null);
 	let patchName = $state('');
 	let showCreate = $state(false);
 	let showUpdate = $state(false);
@@ -59,10 +59,18 @@
 		});
 	}
 
+	function openUpdateModal(subject: Subject) {
+		selectedSubject = subject;
+		patchName = subject.name;
+		showUpdate = true;
+	}
+
 	async function updateSubject() {
+		if (!selectedSubject) return;
+		const id = selectedSubject.id;
 		await submit(async () => {
-			await api<Subject>(`/api/subjects/${patchId}`, { method: 'PATCH', body: JSON.stringify({ name: patchName }) });
-			patchId = '';
+			await api<Subject>(`/api/subjects/${id}`, { method: 'PATCH', body: JSON.stringify({ name: patchName }) });
+			selectedSubject = null;
 			patchName = '';
 			showUpdate = false;
 			await load();
@@ -118,23 +126,15 @@
 <Notice {error} {success} />
 
 <AccessPanel authorities={['subject.read', 'subject.*']}>
-	{#if canCreate || canUpdate}
-		<section class="page-actions" aria-label="Aksi subjek">
-			{#if canUpdate}
-				<button class="btn btn-secondary" type="button" onclick={() => showUpdate = true}>
-					<Icons name="edit" size={17} />
-					<span>Update Subjek</span>
-				</button>
-			{/if}
-			{#if canCreate}
-				<button class="btn btn-primary" type="button" onclick={() => showCreate = true}>
-					<Icons name="book" size={17} />
-					<span>Tambah Subjek</span>
-				</button>
-			{/if}
-		</section>
-	{/if}
-
+	<section class="page-actions" aria-label="Aksi subjek">
+		{#if canCreate}
+			<button class="btn btn-primary" type="button" onclick={() => showCreate = true}>
+				<Icons name="book" size={17} />
+				<span>Tambah Subjek</span>
+			</button>
+		{/if}
+	</section>
+	
 	<section>
 		<h3 class="mb-4">Daftar Subjek</h3>
 		<div class="subject-grid">
@@ -149,11 +149,18 @@
 							<div class="subject-id">ID #{subject.id}</div>
 						</div>
 					</div>
-					{#if canDelete}
-						<button class="btn btn-ghost btn-sm danger" aria-label="Hapus subjek" type="button" onclick={() => deleteSubject(subject)}>
-							<Icons name="x" size={14} />
-						</button>
-					{/if}
+					<div class="subject-actions">
+						{#if canUpdate}
+							<button class="btn btn-ghost btn-sm" aria-label="Edit subjek" type="button" onclick={() => openUpdateModal(subject)}>
+								<Icons name="edit" size={14} />
+							</button>
+						{/if}
+						{#if canDelete}
+							<button class="btn btn-ghost btn-sm danger" aria-label="Hapus subjek" type="button" onclick={() => deleteSubject(subject)}>
+								<Icons name="x" size={14} />
+							</button>
+						{/if}
+					</div>
 				</div>
 			{:else}
 				<div style="grid-column: 1 / -1;"><EmptyState text="Belum ada data subjek." /></div>
@@ -189,23 +196,19 @@
 	</div>
 {/if}
 
-{#if showUpdate && canUpdate}
+{#if showUpdate && canUpdate && selectedSubject}
 	<div class="modal-backdrop" role="presentation" onclick={() => showUpdate = false}>
 		<section class="modal-panel" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
 			<div class="modal-head">
 				<div>
 					<h3>Update Subjek</h3>
-					<p>Ubah nama subjek berdasarkan ID.</p>
+					<p>Ubah nama subjek {selectedSubject.name}.</p>
 				</div>
 				<button class="btn btn-ghost btn-icon" aria-label="Tutup modal" type="button" onclick={() => showUpdate = false}>
 					<Icons name="x" size={18} />
 				</button>
 			</div>
 			<form class="modal-form" onsubmit={(event) => { event.preventDefault(); void updateSubject(); }}>
-				<div class="form-group">
-					<label for="patchSubjectId">Subject ID</label>
-					<input id="patchSubjectId" bind:value={patchId} type="number" required />
-				</div>
 				<div class="form-group">
 					<label for="patchSubjectName">Nama Baru</label>
 					<input id="patchSubjectName" bind:value={patchName} required />
@@ -241,6 +244,14 @@
 		position: relative;
 		margin-bottom: 0;
 		padding: 1rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+    
+	.subject-actions {
+		display: flex;
+		gap: 0.25rem;
 	}
 
 	.subject-icon {
@@ -252,29 +263,29 @@
 		display: grid;
 		place-items: center;
 	}
-
+    
 	.subject-name {
 		font-weight: 700;
 	}
-
+    
 	.subject-id {
 		font-size: 0.75rem;
 		color: var(--text-muted);
 	}
-
+    
 	.btn-sm,
 	.btn-icon {
 		width: 38px;
 		height: 38px;
 		padding: 0;
 	}
-
+    
 	.btn-sm {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
 	}
-
+    
 	.danger {
 		color: var(--error);
 	}
