@@ -45,6 +45,28 @@ public interface GroupScheduleRepository extends JpaRepository<GroupSchedule, Lo
     );
 
     @Query("""
+        SELECT s
+        FROM GroupSchedule s
+        WHERE s.deletedAt IS NULL
+            AND (:groupId IS NULL OR s.group.id = :groupId)
+            AND (:dayOfWeek IS NULL OR s.dayOfWeek = :dayOfWeek)
+            AND EXISTS (
+                SELECT 1
+                FROM Enrollment e
+                WHERE e.deletedAt IS NULL
+                    AND e.userId = :userId
+                    AND e.group.id = s.group.id
+            )
+    """)
+    @EntityGraph(attributePaths = {"group", "group.subject", "scheduleTemplate"})
+    Page<GroupSchedule> searchActiveSchedulesByUserId(
+        @Param("userId") Long userId,
+        @Param("groupId") Long groupId,
+        @Param("dayOfWeek") DayOfWeek dayOfWeek,
+        Pageable pageable
+    );
+
+    @Query("""
         SELECT COUNT(s) > 0
         FROM GroupSchedule s
         WHERE s.deletedAt IS NULL

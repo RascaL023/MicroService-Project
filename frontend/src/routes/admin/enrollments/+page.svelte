@@ -2,4 +2,4 @@
 	import EnrollmentsPage from '../../enrollments/+page.svelte';
 </script>
 
-<EnrollmentsPage />
+<EnrollmentsPage portal="admin" />

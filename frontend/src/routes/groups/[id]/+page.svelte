@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icons from '$lib/components/Icons.svelte';
 	import Notice from '$lib/components/Notice.svelte';
@@ -50,6 +51,8 @@
 	let loading = $state(true);
 	let searchingUsers = $state(false);
 	let activeDetailTab = $state<'meetings' | 'assessments' | 'schedules' | 'members'>('meetings');
+	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
+	let pendingConfirm: (() => Promise<void>) | null = null;
 	let error = $state('');
 	let success = $state('');
 
@@ -58,9 +61,12 @@
 		page.url.pathname.startsWith('/admin/') ? '/admin' :
 		page.url.pathname.startsWith('/app/') ? '/app' : ''
 	);
-	const canEdit = $derived(hasAnyAuthority(session, ['group.update', 'group.*']));
-	const canManageMembers = $derived(hasAnyAuthority(session, ['enrollment.create', 'enrollment.update', 'enrollment.delete', 'enrollment.*']));
-	const canManageSchedules = $derived(hasAnyAuthority(session, ['group-schedule.create', 'group-schedule.delete', 'group-schedule.*']));
+	const canUpdateGroup = $derived(hasAnyAuthority(session, ['group.update', 'group.*']));
+	const canCreateMember = $derived(hasAnyAuthority(session, ['enrollment.create', 'enrollment.*']));
+	const canUpdateMember = $derived(hasAnyAuthority(session, ['enrollment.update', 'enrollment.*']));
+	const canDeleteMember = $derived(hasAnyAuthority(session, ['enrollment.delete', 'enrollment.*']));
+	const canCreateSchedule = $derived(hasAnyAuthority(session, ['group-schedule.create', 'group-schedule.*']));
+	const canDeleteSchedule = $derived(hasAnyAuthority(session, ['group-schedule.delete', 'group-schedule.*']));
 	const isGroupInstructor = $derived(Boolean(detail?.members.some((member) =>
 		member.user?.id === session?.userId && member.role.toUpperCase().includes('INSTRUK')
 	)));
@@ -261,11 +267,16 @@
 	}
 
 	async function removeMember(enrollmentId: number) {
-		if (!confirm('Hapus member dari group ini?')) return;
-		await submit(async () => {
-			await api<null>(`/api/enrollments/${enrollmentId}`, { method: 'DELETE' });
-			await loadDetail();
-			success = 'Member berhasil dihapus.';
+		askConfirm({
+			title: 'Hapus member?',
+			message: 'Member akan dihapus dari group ini.',
+			confirmLabel: 'Hapus Member'
+		}, async () => {
+			await submit(async () => {
+				await api<null>(`/api/enrollments/${enrollmentId}`, { method: 'DELETE' });
+				await loadDetail();
+				success = 'Member berhasil dihapus.';
+			});
 		});
 	}
 
@@ -300,11 +311,16 @@
 	}
 
 	async function removeSchedule(scheduleId: number) {
-		if (!confirm('Hapus jadwal group ini?')) return;
-		await submit(async () => {
-			await api<null>(`/api/group-schedules/${scheduleId}`, { method: 'DELETE' });
-			await loadDetail();
-			success = 'Jadwal berhasil dihapus.';
+		askConfirm({
+			title: 'Hapus jadwal?',
+			message: 'Jadwal group ini akan dihapus.',
+			confirmLabel: 'Hapus Jadwal'
+		}, async () => {
+			await submit(async () => {
+				await api<null>(`/api/group-schedules/${scheduleId}`, { method: 'DELETE' });
+				await loadDetail();
+				success = 'Jadwal berhasil dihapus.';
+			});
 		});
 	}
 
@@ -417,13 +433,33 @@
 	}
 
 	async function deleteAssessment(assessmentId: number) {
-		if (!confirm('Hapus assessment ini?')) return;
-
-		await submit(async () => {
-			await api<null>(`/api/assessments/${assessmentId}`, { method: 'DELETE' });
-			await loadDetail();
-			success = 'Assessment berhasil dihapus.';
+		askConfirm({
+			title: 'Hapus assessment?',
+			message: 'Assessment ini akan dihapus dari group.',
+			confirmLabel: 'Hapus Assessment'
+		}, async () => {
+			await submit(async () => {
+				await api<null>(`/api/assessments/${assessmentId}`, { method: 'DELETE' });
+				await loadDetail();
+				success = 'Assessment berhasil dihapus.';
+			});
 		});
+	}
+
+	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
+		confirmState = { open: true, title: config.title, message: config.message, confirmLabel: config.confirmLabel ?? 'Ya, lanjutkan' };
+		pendingConfirm = action;
+	}
+
+	function closeConfirm() {
+		confirmState = { ...confirmState, open: false };
+		pendingConfirm = null;
+	}
+
+	function runConfirm() {
+		const action = pendingConfirm;
+		closeConfirm();
+		if (action) void action();
 	}
 
 	async function downloadAssessment(assessment: Assessment) {
@@ -621,7 +657,7 @@
 						<Icons name="checkCircle" size={17} />
 						<span>Gradebook</span>
 					</button>
-					{#if canEdit}
+					{#if canUpdateGroup}
 						<button class="btn btn-primary edit-button" type="button" onclick={openEdit}>
 							<Icons name="layers" size={17} />
 							<span>Edit Group</span>
@@ -777,7 +813,7 @@
 							<h3>Jadwal</h3>
 							<span>{detail.schedules.length} slot</span>
 						</div>
-						{#if canManageSchedules}
+						{#if canCreateSchedule}
 							<button class="btn btn-secondary compact" type="button" onclick={openScheduleModal}>
 								<Icons name="calendar" size={16} />
 								<span>Tambah</span>
@@ -796,7 +832,7 @@
 										<strong>{timeLabel(schedule.startTime, schedule.endTime)}</strong>
 										<p>{schedule.templateName || 'Template lama belum terhubung'}</p>
 									</div>
-									{#if canManageSchedules}
+									{#if canDeleteSchedule}
 										<button class="btn btn-ghost icon-btn danger" type="button" onclick={() => removeSchedule(schedule.id)}>
 											<Icons name="x" size={16} />
 										</button>
@@ -815,7 +851,7 @@
 							<h3>Member</h3>
 							<span>{detail.members.length} orang</span>
 						</div>
-						{#if canManageMembers}
+						{#if canCreateMember}
 							<button class="btn btn-secondary compact" type="button" onclick={openMemberModal}>
 								<Icons name="users" size={16} />
 								<span>Tambah</span>
@@ -835,14 +871,18 @@
 										<p>Batch {member.user?.batch ?? '-'} • {member.user?.gender ?? '-'}</p>
 									</div>
 									<span class="badge badge-blue">{member.role}</span>
-									{#if canManageMembers}
+									{#if canUpdateMember || canDeleteMember}
 										<div class="item-actions">
-											<button class="btn btn-ghost icon-btn" type="button" aria-label="Edit member" onclick={() => openMemberEditModal(member)}>
-												<Icons name="edit" size={16} />
-											</button>
-											<button class="btn btn-ghost icon-btn danger" type="button" aria-label="Hapus member" onclick={() => removeMember(member.enrollmentId)}>
-												<Icons name="x" size={16} />
-											</button>
+											{#if canUpdateMember}
+												<button class="btn btn-ghost icon-btn" type="button" aria-label="Edit member" onclick={() => openMemberEditModal(member)}>
+													<Icons name="edit" size={16} />
+												</button>
+											{/if}
+											{#if canDeleteMember}
+												<button class="btn btn-ghost icon-btn danger" type="button" aria-label="Hapus member" onclick={() => removeMember(member.enrollmentId)}>
+													<Icons name="x" size={16} />
+												</button>
+											{/if}
 										</div>
 									{/if}
 								</div>
@@ -1081,7 +1121,7 @@
 	</div>
 {/if}
 
-{#if showEdit && detail}
+{#if showEdit && detail && canUpdateGroup}
 	<div class="modal-backdrop" role="presentation" onclick={() => showEdit = false}>
 		<section
 			class="modal-panel"
@@ -1135,7 +1175,7 @@
 	</div>
 {/if}
 
-{#if showMemberModal && detail}
+{#if showMemberModal && detail && canCreateMember}
 	<div class="modal-backdrop" role="presentation" onclick={() => showMemberModal = false}>
 		<section
 			class="modal-panel"
@@ -1207,7 +1247,7 @@
 	</div>
 {/if}
 
-{#if showMemberEditModal && detail}
+{#if showMemberEditModal && detail && canUpdateMember}
 	<div class="modal-backdrop" role="presentation" onclick={() => showMemberEditModal = false}>
 		<section
 			class="modal-panel"
@@ -1279,7 +1319,7 @@
 	</div>
 {/if}
 
-{#if showScheduleModal && detail}
+{#if showScheduleModal && detail && canCreateSchedule}
 	<div class="modal-backdrop" role="presentation" onclick={() => showScheduleModal = false}>
 		<section
 			class="modal-panel"
@@ -1330,6 +1370,15 @@
 		</section>
 	</div>
 {/if}
+
+<ConfirmModal
+	open={confirmState.open}
+	title={confirmState.title}
+	message={confirmState.message}
+	confirmLabel={confirmState.confirmLabel}
+	onConfirm={runConfirm}
+	onCancel={closeConfirm}
+/>
 
 <style>
 	.back-row {

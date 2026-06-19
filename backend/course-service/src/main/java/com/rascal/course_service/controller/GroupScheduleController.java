@@ -48,6 +48,20 @@ public class GroupScheduleController {
         return ApiResponse.paged(HttpStatus.OK, responses);
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("hasAnyAuthority('group-schedule.*', 'group-schedule.read')")
+    public ResponseEntity<?> getMinePaged(
+        @RequestParam(required = false) Long groupId,
+        @RequestParam(required = false) String dayOfWeek,
+        Pageable pageable
+    ) {
+        Page<GroupScheduleResponse> responses = groupScheduleService
+            .getMinePaged(groupId, dayOfWeek, pageable)
+            .map(GroupScheduleMapper::toResponse);
+
+        return ApiResponse.paged(HttpStatus.OK, responses);
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('group-schedule.*', 'group-schedule.read')")
     public ResponseEntity<?> getById(@PathVariable Long id) {

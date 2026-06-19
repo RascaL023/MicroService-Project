@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icons from '$lib/components/Icons.svelte';
 	import Notice from '$lib/components/Notice.svelte';
@@ -27,12 +28,16 @@
 	let completeForm = $state({ subjectId: '', academicYear: '2026/2027' });
 	let showCreate = $state(false);
 	let showComplete = $state(false);
+	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
+	let pendingConfirm: (() => Promise<void>) | null = null;
 	let error = $state('');
 	let success = $state('');
 	let loading = $state(true);
 	let completing = $state(false);
 
-	const canManage = $derived(hasAnyAuthority(session, ['group.create', 'group.update', 'group.delete', 'group.*']));
+	const canCreate = $derived(hasAnyAuthority(session, ['group.create', 'group.*']));
+	const canUpdate = $derived(hasAnyAuthority(session, ['group.update', 'group.*']));
+	const canDelete = $derived(hasAnyAuthority(session, ['group.delete', 'group.*']));
 	const portalPrefix = $derived(
 		page.url.pathname.startsWith('/admin/') ? '/admin' :
 		page.url.pathname.startsWith('/app/') ? '/app' : ''
@@ -137,12 +142,33 @@
 	}
 
 	async function deleteGroup(group: Group) {
-		if (!confirm(`Hapus ${group.name}?`)) return;
-		await submit(async () => {
-			await api<null>(`/api/groups/${group.id}`, { method: 'DELETE' });
-			await loadGroups();
-			success = 'Group berhasil dihapus.';
+		askConfirm({
+			title: 'Hapus group?',
+			message: `Group ${group.name} akan dihapus dari sistem.`,
+			confirmLabel: 'Hapus Group'
+		}, async () => {
+			await submit(async () => {
+				await api<null>(`/api/groups/${group.id}`, { method: 'DELETE' });
+				await loadGroups();
+				success = 'Group berhasil dihapus.';
+			});
 		});
+	}
+
+	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
+		confirmState = { open: true, title: config.title, message: config.message, confirmLabel: config.confirmLabel ?? 'Ya, lanjutkan' };
+		pendingConfirm = action;
+	}
+
+	function closeConfirm() {
+		confirmState = { ...confirmState, open: false };
+		pendingConfirm = null;
+	}
+
+	function runConfirm() {
+		const action = pendingConfirm;
+		closeConfirm();
+		if (action) void action();
 	}
 
 	function statusClass(status: string) {
@@ -174,16 +200,20 @@
 		description="Lihat kelompok belajar aktif secara ringkas. Buka detail untuk melihat jadwal dan member group."
 	/>
 
-	{#if canManage}
+	{#if canCreate || canUpdate}
 		<div class="page-actions">
-			<button class="btn btn-secondary" type="button" onclick={openComplete}>
-				<Icons name="checkCircle" size={17} />
-				<span>Selesaikan Periode</span>
-			</button>
-			<button class="btn btn-primary" type="button" onclick={() => showCreate = true}>
-				<Icons name="layers" size={17} />
-				<span>Buat Group</span>
-			</button>
+			{#if canUpdate}
+				<button class="btn btn-secondary" type="button" onclick={openComplete}>
+					<Icons name="checkCircle" size={17} />
+					<span>Selesaikan Periode</span>
+				</button>
+			{/if}
+			{#if canCreate}
+				<button class="btn btn-primary" type="button" onclick={() => showCreate = true}>
+					<Icons name="layers" size={17} />
+					<span>Buat Group</span>
+				</button>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -267,7 +297,7 @@
 							<span>Detail</span>
 							<Icons name="chevronRight" size={16} />
 						</button>
-						{#if canManage}
+						{#if canDelete}
 							<button class="btn btn-ghost danger" type="button" onclick={() => deleteGroup(group)}>
 								<Icons name="x" size={17} />
 							</button>
@@ -280,7 +310,7 @@
 	{/if}
 </AccessPanel>
 
-{#if showCreate}
+{#if showCreate && canCreate}
 	<div class="modal-backdrop" role="presentation" onclick={() => showCreate = false}>
 		<section
 			class="modal-panel"
@@ -326,7 +356,7 @@
 	</div>
 {/if}
 
-{#if showComplete}
+{#if showComplete && canUpdate}
 	<div class="modal-backdrop" role="presentation" onclick={() => showComplete = false}>
 		<section
 			class="modal-panel complete-panel"
@@ -378,6 +408,15 @@
 		</section>
 	</div>
 {/if}
+
+<ConfirmModal
+	open={confirmState.open}
+	title={confirmState.title}
+	message={confirmState.message}
+	confirmLabel={confirmState.confirmLabel}
+	onConfirm={runConfirm}
+	onCancel={closeConfirm}
+/>
 
 <style>
 	.toolbar {

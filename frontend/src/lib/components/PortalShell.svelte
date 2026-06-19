@@ -52,7 +52,6 @@
 			label: 'Pembelajaran',
 			items: [
 				{ href: '/app/groups', label: 'Group', icon: 'layers', authorities: ['group.read', 'group.*'] },
-				{ href: '/app/schedules', label: 'Jadwal', icon: 'calendar', authorities: ['group-schedule.read', 'group-schedule.*'] },
 				{ href: '/app/enrollments', label: 'Kursus Saya', icon: 'graduationCap', authorities: ['enrollment.read', 'enrollment.*'] },
 				{
 					href: '/app/materials',

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icons from '$lib/components/Icons.svelte';
 	import Notice from '$lib/components/Notice.svelte';
@@ -22,12 +23,16 @@
 	let selectedFile = $state<File | null>(null);
 	let importBatch = $state('');
 	let importResult = $state<UserBulkImportResult | null>(null);
+	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
+	let pendingConfirm: (() => Promise<void>) | null = null;
 	let error = $state('');
 	let success = $state('');
 	let loading = $state(true);
 	let busy = $state('');
 
-	const canManage = $derived(hasAnyAuthority(session, ['user.create', 'user.update', 'user.delete', 'user.*']));
+	const canCreate = $derived(hasAnyAuthority(session, ['user.create', 'user.*']));
+	const canUpdate = $derived(hasAnyAuthority(session, ['user.update', 'user.*']));
+	const canDelete = $derived(hasAnyAuthority(session, ['user.delete', 'user.*']));
 
 	onMount(() => {
 		session = readSession();
@@ -159,12 +164,33 @@
 	}
 
 	async function deleteUser(user: User) {
-		if (!confirm(`Hapus ${user.name}?`)) return;
-		await submit(async () => {
-			await api<null>(`/api/users/${user.id}`, { method: 'DELETE' });
-			await loadUsers();
-			success = 'User berhasil dihapus.';
+		askConfirm({
+			title: 'Hapus user?',
+			message: `User ${user.name} akan dihapus dari sistem.`,
+			confirmLabel: 'Hapus User'
+		}, async () => {
+			await submit(async () => {
+				await api<null>(`/api/users/${user.id}`, { method: 'DELETE' });
+				await loadUsers();
+				success = 'User berhasil dihapus.';
+			});
 		});
+	}
+
+	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
+		confirmState = { open: true, title: config.title, message: config.message, confirmLabel: config.confirmLabel ?? 'Ya, lanjutkan' };
+		pendingConfirm = action;
+	}
+
+	function closeConfirm() {
+		confirmState = { ...confirmState, open: false };
+		pendingConfirm = null;
+	}
+
+	function runConfirm() {
+		const action = pendingConfirm;
+		closeConfirm();
+		if (action) void action();
 	}
 
 	function openCreate() {
@@ -267,7 +293,7 @@
 		description="Kelola profil peserta dan batch. Akun login serta role sistem diproses otomatis oleh auth-service."
 	/>
 
-	{#if canManage}
+	{#if canCreate}
 		<div class="page-actions">
 			<button class="btn btn-secondary" type="button" onclick={openImport}>
 				<Icons name="upload" size={17} />
@@ -346,15 +372,19 @@
 						</span>
 					</div>
 
-					{#if canManage}
+					{#if canUpdate || canDelete}
 						<div class="user-actions">
-							<button class="btn btn-secondary" type="button" onclick={() => openEdit(user)}>
-								<Icons name="edit" size={16} />
-								<span>Edit</span>
-							</button>
-							<button class="btn btn-ghost danger icon-btn" type="button" aria-label="Hapus user" onclick={() => deleteUser(user)}>
-								<Icons name="x" size={17} />
-							</button>
+							{#if canUpdate}
+								<button class="btn btn-secondary" type="button" onclick={() => openEdit(user)}>
+									<Icons name="edit" size={16} />
+									<span>Edit</span>
+								</button>
+							{/if}
+							{#if canDelete}
+								<button class="btn btn-ghost danger icon-btn" type="button" aria-label="Hapus user" onclick={() => deleteUser(user)}>
+									<Icons name="x" size={17} />
+								</button>
+							{/if}
 						</div>
 					{/if}
 				</article>
@@ -364,7 +394,7 @@
 	{/if}
 </AccessPanel>
 
-{#if showCreate}
+{#if showCreate && canCreate}
 	<div class="modal-backdrop" role="presentation" onclick={() => showCreate = false}>
 		<section
 			class="modal-panel"
@@ -419,7 +449,7 @@
 	</div>
 {/if}
 
-{#if showEdit}
+{#if showEdit && canUpdate}
 	<div class="modal-backdrop" role="presentation" onclick={() => showEdit = false}>
 		<section
 			class="modal-panel"
@@ -474,7 +504,7 @@
 	</div>
 {/if}
 
-{#if showImport}
+{#if showImport && canCreate}
 	<div class="modal-backdrop" role="presentation" onclick={() => showImport = false}>
 		<section
 			class="modal-panel import-panel"
@@ -560,6 +590,15 @@
 		</section>
 	</div>
 {/if}
+
+<ConfirmModal
+	open={confirmState.open}
+	title={confirmState.title}
+	message={confirmState.message}
+	confirmLabel={confirmState.confirmLabel}
+	onConfirm={runConfirm}
+	onCancel={closeConfirm}
+/>
 
 <style>
 	.page-heading {

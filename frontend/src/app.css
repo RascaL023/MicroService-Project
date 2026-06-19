@@ -374,10 +374,85 @@ input, select, textarea {
 	color: var(--text-main);
 }
 
+input:not([type='checkbox']):not([type='radio']),
+select {
+	min-height: 45px;
+}
+
 input:focus, select:focus, textarea:focus {
 	outline: none;
 	border-color: var(--border-focus);
 	box-shadow: 0 0 0 4px var(--primary-soft);
+}
+
+.filters > .btn,
+.enrollment-filters > .btn,
+.schedule-filters > .btn,
+.report-form > .btn,
+.compact-filter form > .btn,
+.batch-filter > .btn {
+	align-self: end;
+	height: 45px;
+	min-height: 45px;
+	padding-top: 0;
+	padding-bottom: 0;
+	margin-bottom: 0;
+}
+
+.page-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: var(--bg-overlay);
+	display: grid;
+	place-items: center;
+	z-index: 100;
+	padding: 1rem;
+}
+
+.modal-panel {
+	width: min(620px, 100%);
+	max-height: calc(100vh - 2rem);
+	overflow-y: auto;
+	background: var(--bg-surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-lg);
+	padding: 1.5rem;
+}
+
+.modal-head,
+.modal-actions {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+}
+
+.modal-head {
+	margin-bottom: 1.25rem;
+}
+
+.modal-head p {
+	margin-top: 0.25rem;
+	font-size: 0.875rem;
+}
+
+.modal-actions {
+	margin-top: 1.25rem;
+}
+
+.modal-form,
+.form-stack {
+	display: grid;
+	gap: 1rem;
 }
 
 /* Tables */

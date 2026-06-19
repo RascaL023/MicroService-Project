@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import Icons from '$lib/components/Icons.svelte';
@@ -25,11 +26,18 @@
 	let uploadSubjectId = $state('');
 	let selectedFile = $state<File | null>(null);
 	let showMaterialEdit = $state(false);
+	let showModuleUpload = $state(false);
+	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
+	let pendingConfirm: (() => Promise<void>) | null = null;
 	let busy = $state<'materials' | 'modules' | 'download' | ''>('');
 	let error = $state('');
 	let success = $state('');
 
-	const canManageMaterials = $derived(hasAnyAuthority(session, ['subject.*', 'subject.update', 'subject-material.*', 'subject-material.create', 'subject-material.update', 'subject-material.delete']));
+	const canCreateMaterial = $derived(hasAnyAuthority(session, ['subject.*', 'subject-material.*', 'subject-material.create']));
+	const canUpdateMaterial = $derived(hasAnyAuthority(session, ['subject.*', 'subject-material.*', 'subject-material.update']));
+	const canDeleteMaterial = $derived(hasAnyAuthority(session, ['subject.*', 'subject-material.*', 'subject-material.delete']));
+	const canCreateModule = $derived(hasAnyAuthority(session, ['subject.*', 'subject-module.*', 'subject-module.create']));
+	const canDeleteModule = $derived(hasAnyAuthority(session, ['subject.*', 'subject-module.*', 'subject-module.delete']));
 	const selectedSubjectName = $derived(subjects.find((subject) => String(subject.id) === filters.subjectId)?.name ?? 'Semua subjek');
 	const selectedFileValid = $derived(selectedFile ? validateSelectedFile(selectedFile) : '');
 
@@ -120,16 +128,21 @@
 	}
 
 	async function deleteMaterial(id: number) {
-		if (!confirm('Hapus rencana pertemuan ini?')) return;
-		error = '';
-		success = '';
-		try {
-			await api<null>(`/api/subject-materials/${id}`, { method: 'DELETE' });
-			success = 'Rencana pertemuan dihapus.';
-			await loadMaterials();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Gagal menghapus rencana pertemuan.';
-		}
+		askConfirm({
+			title: 'Hapus rencana pertemuan?',
+			message: 'Rencana pertemuan ini akan dihapus dari materi subjek.',
+			confirmLabel: 'Hapus Rencana'
+		}, async () => {
+			error = '';
+			success = '';
+			try {
+				await api<null>(`/api/subject-materials/${id}`, { method: 'DELETE' });
+				success = 'Rencana pertemuan dihapus.';
+				await loadMaterials();
+			} catch (err) {
+				error = err instanceof Error ? err.message : 'Gagal menghapus rencana pertemuan.';
+			}
+		});
 	}
 
 	function openMaterialEdit(item: SubjectMaterial) {
@@ -193,8 +206,7 @@
 			formData.set('file', selectedFile);
 			await api<SubjectModule>('/api/subject-modules', { method: 'POST', body: formData });
 			success = 'File modul berhasil diupload.';
-			selectedFile = null;
-			clearFileInput();
+			closeModuleUpload();
 			await loadModules();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Gagal upload file modul.';
@@ -204,16 +216,37 @@
 	}
 
 	async function deleteModule(id: number) {
-		if (!confirm('Hapus file modul ini? File fisiknya juga akan dihapus.')) return;
-		error = '';
-		success = '';
-		try {
-			await api<null>(`/api/subject-modules/${id}`, { method: 'DELETE' });
-			success = 'File modul dihapus.';
-			await loadModules();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Gagal menghapus file modul.';
-		}
+		askConfirm({
+			title: 'Hapus file modul?',
+			message: 'File modul dan file fisiknya akan dihapus.',
+			confirmLabel: 'Hapus File'
+		}, async () => {
+			error = '';
+			success = '';
+			try {
+				await api<null>(`/api/subject-modules/${id}`, { method: 'DELETE' });
+				success = 'File modul dihapus.';
+				await loadModules();
+			} catch (err) {
+				error = err instanceof Error ? err.message : 'Gagal menghapus file modul.';
+			}
+		});
+	}
+
+	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
+		confirmState = { open: true, title: config.title, message: config.message, confirmLabel: config.confirmLabel ?? 'Ya, lanjutkan' };
+		pendingConfirm = action;
+	}
+
+	function closeConfirm() {
+		confirmState = { ...confirmState, open: false };
+		pendingConfirm = null;
+	}
+
+	function runConfirm() {
+		const action = pendingConfirm;
+		closeConfirm();
+		if (action) void action();
 	}
 
 	async function downloadModule(module: SubjectModule) {
@@ -257,6 +290,12 @@
 	function clearFileInput() {
 		const input = document.getElementById('module-file') as HTMLInputElement | null;
 		if (input) input.value = '';
+	}
+
+	function closeModuleUpload() {
+		selectedFile = null;
+		clearFileInput();
+		showModuleUpload = false;
 	}
 
 	function fileSizeLabel(size: number) {
@@ -361,14 +400,18 @@
 											<h3>{item.title}</h3>
 											<p>{item.subjectName || `Subjek #${item.subjectId}`}</p>
 										</div>
-										{#if canManageMaterials}
+										{#if canUpdateMaterial || canDeleteMaterial}
 											<div class="item-actions">
-												<button class="btn btn-ghost btn-icon" aria-label="Edit rencana pertemuan" type="button" onclick={() => openMaterialEdit(item)}>
-													<Icons name="edit" size={16} />
-												</button>
-												<button class="btn btn-ghost btn-icon danger" aria-label="Hapus rencana pertemuan" type="button" onclick={() => deleteMaterial(item.id)}>
-													<Icons name="x" size={16} />
-												</button>
+												{#if canUpdateMaterial}
+													<button class="btn btn-ghost btn-icon" aria-label="Edit rencana pertemuan" type="button" onclick={() => openMaterialEdit(item)}>
+														<Icons name="edit" size={16} />
+													</button>
+												{/if}
+												{#if canDeleteMaterial}
+													<button class="btn btn-ghost btn-icon danger" aria-label="Hapus rencana pertemuan" type="button" onclick={() => deleteMaterial(item.id)}>
+														<Icons name="x" size={16} />
+													</button>
+												{/if}
 											</div>
 										{/if}
 									</div>
@@ -384,7 +427,7 @@
 					<Pagination meta={materialPage} onPage={changeMaterialPage} onSize={changeMaterialSize} />
 				</section>
 
-				{#if canManageMaterials}
+				{#if canCreateMaterial}
 				<aside class="card sticky-card">
 					<h3>Tambah Rencana</h3>
 					<p>Rencana pertemuan adalah acuan materi untuk semua grup dengan subjek yang sama.</p>
@@ -420,6 +463,15 @@
 				{/if}
 			</div>
 		{:else}
+			{#if canCreateModule}
+				<section class="page-actions module-page-actions" aria-label="Aksi file modul">
+					<button class="btn btn-primary" type="button" onclick={() => showModuleUpload = true}>
+						<Icons name="upload" size={17} />
+						<span>Upload File Modul</span>
+					</button>
+				</section>
+			{/if}
+
 			<div class="content-grid">
 				<section>
 					<div class="card compact-filter">
@@ -452,9 +504,11 @@
 										<Icons name="download" size={16} />
 										Download
 									</button>
-									<button class="btn btn-ghost btn-icon danger" aria-label="Hapus file modul" type="button" onclick={() => deleteModule(module.id)}>
-										<Icons name="x" size={16} />
-									</button>
+									{#if canDeleteModule}
+										<button class="btn btn-ghost btn-icon danger" aria-label="Hapus file modul" type="button" onclick={() => deleteModule(module.id)}>
+											<Icons name="x" size={16} />
+										</button>
+									{/if}
 								</div>
 							</article>
 						{:else}
@@ -463,49 +517,12 @@
 					</div>
 					<Pagination meta={modulePage} onPage={changeModulePage} onSize={changeModuleSize} />
 				</section>
-
-				<aside class="card sticky-card">
-					<h3>Upload File Modul</h3>
-					<p>Gunakan PDF, PowerPoint, atau Microsoft Word. Maksimal 5MB per file.</p>
-					<form class="form-stack" onsubmit={(event) => { event.preventDefault(); void uploadModule(); }}>
-						<div class="form-group">
-							<label for="upload-subject">Subjek</label>
-							<select id="upload-subject" bind:value={uploadSubjectId} required>
-								<option value="">Pilih Subjek</option>
-								{#each subjects as subject}
-									<option value={subject.id}>{subject.name}</option>
-								{/each}
-							</select>
-						</div>
-
-						<label class="drop-zone" for="module-file" class:invalid={!!selectedFileValid}>
-							<input id="module-file" accept=".pdf,.ppt,.pptx,.doc,.docx" type="file" onchange={handleFileChange} />
-							<Icons name="upload" size={28} />
-							{#if selectedFile}
-								<strong>{selectedFile.name}</strong>
-								<span>{fileSizeLabel(selectedFile.size)}</span>
-							{:else}
-								<strong>Pilih file modul</strong>
-								<span>PDF, PPT, PPTX, DOC, atau DOCX sampai 5MB</span>
-							{/if}
-						</label>
-
-						{#if selectedFileValid}
-							<div class="inline-error">{selectedFileValid}</div>
-						{/if}
-
-						<button class="btn btn-primary w-full" disabled={busy === 'modules' || !selectedFile || !!selectedFileValid} type="submit">
-							<Icons name="upload" size={16} />
-							{busy === 'modules' ? 'Mengupload...' : 'Upload Modul'}
-						</button>
-					</form>
-				</aside>
 			</div>
 		{/if}
 	</section>
 </AccessPanel>
 
-{#if showMaterialEdit}
+{#if showMaterialEdit && canUpdateMaterial}
 	<div class="modal-backdrop" role="presentation" onclick={() => showMaterialEdit = false}>
 		<section
 			class="modal-panel"
@@ -558,6 +575,75 @@
 		</section>
 	</div>
 {/if}
+
+{#if showModuleUpload && canCreateModule}
+	<div class="modal-backdrop" role="presentation" onclick={closeModuleUpload}>
+		<section
+			class="modal-panel"
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			onclick={(event) => event.stopPropagation()}
+			onkeydown={(event) => event.stopPropagation()}
+		>
+			<div class="modal-head">
+				<div>
+					<span class="summary-label">File Modul</span>
+					<h3>Upload File Modul</h3>
+					<p>Gunakan PDF, PowerPoint, atau Microsoft Word. Maksimal 5MB per file.</p>
+				</div>
+				<button class="btn btn-ghost btn-icon" type="button" onclick={closeModuleUpload}>
+					<Icons name="x" size={18} />
+				</button>
+			</div>
+
+			<form class="form-stack modal-form" onsubmit={(event) => { event.preventDefault(); void uploadModule(); }}>
+				<div class="form-group">
+					<label for="upload-subject">Subjek</label>
+					<select id="upload-subject" bind:value={uploadSubjectId} required>
+						<option value="">Pilih Subjek</option>
+						{#each subjects as subject}
+							<option value={subject.id}>{subject.name}</option>
+						{/each}
+					</select>
+				</div>
+
+				<label class="drop-zone" for="module-file" class:invalid={!!selectedFileValid}>
+					<input id="module-file" accept=".pdf,.ppt,.pptx,.doc,.docx" type="file" onchange={handleFileChange} />
+					<Icons name="upload" size={28} />
+					{#if selectedFile}
+						<strong>{selectedFile.name}</strong>
+						<span>{fileSizeLabel(selectedFile.size)}</span>
+					{:else}
+						<strong>Pilih file modul</strong>
+						<span>PDF, PPT, PPTX, DOC, atau DOCX sampai 5MB</span>
+					{/if}
+				</label>
+
+				{#if selectedFileValid}
+					<div class="inline-error">{selectedFileValid}</div>
+				{/if}
+
+				<div class="modal-actions">
+					<button class="btn btn-ghost" type="button" onclick={closeModuleUpload}>Batal</button>
+					<button class="btn btn-primary" disabled={busy === 'modules' || !selectedFile || !!selectedFileValid} type="submit">
+						<Icons name="upload" size={16} />
+						{busy === 'modules' ? 'Mengupload...' : 'Upload Modul'}
+					</button>
+				</div>
+			</form>
+		</section>
+	</div>
+{/if}
+
+<ConfirmModal
+	open={confirmState.open}
+	title={confirmState.title}
+	message={confirmState.message}
+	confirmLabel={confirmState.confirmLabel}
+	onConfirm={runConfirm}
+	onCancel={closeConfirm}
+/>
 
 <style>
 	.materials-shell {

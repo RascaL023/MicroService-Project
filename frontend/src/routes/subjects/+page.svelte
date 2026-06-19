@@ -2,23 +2,35 @@
 	import { onMount } from 'svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import Icons from '$lib/components/Icons.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import { api, hasAnyAuthority, pageItems, paginationMeta, readSession } from '$lib/api';
-	import type { PageData, PaginationMeta, Subject } from '$lib/types';
+	import type { LoginData, PageData, PaginationMeta, Subject } from '$lib/types';
 
 	let subjects = $state<Subject[]>([]);
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
+	let session = $state<LoginData | null>(null);
 	let name = $state('');
 	let patchId = $state('');
 	let patchName = $state('');
+	let showCreate = $state(false);
+	let showUpdate = $state(false);
+	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
+	let pendingConfirm: (() => Promise<void>) | null = null;
 	let error = $state('');
 	let success = $state('');
 
+	const canCreate = $derived(hasAnyAuthority(session, ['subject.create', 'subject.*']));
+	const canUpdate = $derived(hasAnyAuthority(session, ['subject.update', 'subject.*']));
+	const canDelete = $derived(hasAnyAuthority(session, ['subject.delete', 'subject.*']));
+
 	onMount(() => {
-		if (hasAnyAuthority(readSession(), ['subject.*'])) void load();
+		const nextSession = readSession();
+		session = nextSession;
+		if (hasAnyAuthority(nextSession, ['subject.read', 'subject.*'])) void load();
 	});
 
 	async function load() {
@@ -35,6 +47,57 @@
 	async function submit(task: () => Promise<void>) {
 		error = ''; success = '';
 		try { await task(); } catch (err) { error = err instanceof Error ? err.message : 'Request gagal.'; }
+	}
+
+	async function createSubject() {
+		await submit(async () => {
+			await api<Subject>('/api/subjects', { method: 'POST', body: JSON.stringify({ name }) });
+			name = '';
+			showCreate = false;
+			await load();
+			success = 'Subjek berhasil ditambahkan.';
+		});
+	}
+
+	async function updateSubject() {
+		await submit(async () => {
+			await api<Subject>(`/api/subjects/${patchId}`, { method: 'PATCH', body: JSON.stringify({ name: patchName }) });
+			patchId = '';
+			patchName = '';
+			showUpdate = false;
+			await load();
+			success = 'Subjek berhasil diupdate.';
+		});
+	}
+
+	async function deleteSubject(subject: Subject) {
+		askConfirm({
+			title: 'Hapus subjek?',
+			message: `Subjek ${subject.name} akan dihapus dari katalog.`,
+			confirmLabel: 'Hapus Subjek'
+		}, async () => {
+			await submit(async () => {
+				await api<null>(`/api/subjects/${subject.id}`, { method: 'DELETE' });
+				await load();
+				success = 'Subjek dihapus.';
+			});
+		});
+	}
+
+	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
+		confirmState = { open: true, title: config.title, message: config.message, confirmLabel: config.confirmLabel ?? 'Ya, lanjutkan' };
+		pendingConfirm = action;
+	}
+
+	function closeConfirm() {
+		confirmState = { ...confirmState, open: false };
+		pendingConfirm = null;
+	}
+
+	function runConfirm() {
+		const action = pendingConfirm;
+		closeConfirm();
+		if (action) void action();
 	}
 
 	function changePage(page: number) {
@@ -54,65 +117,171 @@
 
 <Notice {error} {success} />
 
-<AccessPanel authorities={['subject.*']}>
-	<div style="display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem; align-items: start;">
-		<section>
-			<h3 class="mb-4">Daftar Subjek</h3>
-			<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
-				{#each subjects as subject}
-					<div class="card" style="margin-bottom: 0; padding: 1rem; position: relative;">
-						<div class="flex items-center gap-3">
-							<div style="width: 32px; height: 32px; background: var(--primary-light); color: var(--primary); border-radius: 6px; display: grid; place-items: center;">
-								<Icons name="book" size={16} />
-							</div>
-							<div>
-								<div style="font-weight: 700;">{subject.name}</div>
-								<div style="font-size: 0.75rem; color: var(--text-muted);">ID #{subject.id}</div>
-							</div>
+<AccessPanel authorities={['subject.read', 'subject.*']}>
+	{#if canCreate || canUpdate}
+		<section class="page-actions" aria-label="Aksi subjek">
+			{#if canUpdate}
+				<button class="btn btn-secondary" type="button" onclick={() => showUpdate = true}>
+					<Icons name="edit" size={17} />
+					<span>Update Subjek</span>
+				</button>
+			{/if}
+			{#if canCreate}
+				<button class="btn btn-primary" type="button" onclick={() => showCreate = true}>
+					<Icons name="book" size={17} />
+					<span>Tambah Subjek</span>
+				</button>
+			{/if}
+		</section>
+	{/if}
+
+	<section>
+		<h3 class="mb-4">Daftar Subjek</h3>
+		<div class="subject-grid">
+			{#each subjects as subject}
+				<div class="card subject-card">
+					<div class="flex items-center gap-3">
+						<div class="subject-icon">
+							<Icons name="book" size={16} />
 						</div>
-						<button class="btn btn-ghost btn-sm" style="position: absolute; top: 0.5rem; right: 0.5rem; color: var(--error);" onclick={() => submit(async () => { if(confirm('Hapus subjek?')) { await api<null>(`/api/subjects/${subject.id}`, { method: 'DELETE' }); await load(); success = 'Subjek dihapus.'; } })}>
+						<div>
+							<div class="subject-name">{subject.name}</div>
+							<div class="subject-id">ID #{subject.id}</div>
+						</div>
+					</div>
+					{#if canDelete}
+						<button class="btn btn-ghost btn-sm danger" aria-label="Hapus subjek" type="button" onclick={() => deleteSubject(subject)}>
 							<Icons name="x" size={14} />
 						</button>
-					</div>
-				{:else}
-					<div style="grid-column: 1 / -1;"><EmptyState text="Belum ada data subjek." /></div>
-				{/each}
-			</div>
-			<Pagination meta={pageMeta} onPage={changePage} onSize={changePageSize} />
-		</section>
-
-		<aside>
-			<div class="card">
-				<h3 class="mb-4">Tambah Subjek</h3>
-				<form class="flex flex-direction-column gap-4" onsubmit={(event) => { event.preventDefault(); void submit(async () => { await api<Subject>('/api/subjects', { method: 'POST', body: JSON.stringify({ name }) }); name = ''; await load(); success = 'Subjek berhasil ditambahkan.'; }); }}>
-					<div class="form-group">
-						<label for="subjectName">Nama Subjek</label>
-						<input id="subjectName" bind:value={name} placeholder="Contoh: Pemrograman Java" required />
-					</div>
-					<button class="btn btn-primary w-full" type="submit">Tambah</button>
-				</form>
-			</div>
-
-			<div class="card mt-4">
-				<h3 class="mb-4">Update Subjek</h3>
-				<form class="flex flex-direction-column gap-4" onsubmit={(event) => { event.preventDefault(); void submit(async () => { await api<Subject>(`/api/subjects/${patchId}`, { method: 'PATCH', body: JSON.stringify({ name: patchName }) }); patchId = ''; patchName = ''; await load(); success = 'Subjek berhasil diupdate.'; }); }}>
-					<div class="form-group">
-						<label for="patchSubjectId">Subject ID</label>
-						<input id="patchSubjectId" bind:value={patchId} type="number" required />
-					</div>
-					<div class="form-group">
-						<label for="patchSubjectName">Nama Baru</label>
-						<input id="patchSubjectName" bind:value={patchName} required />
-					</div>
-					<button class="btn btn-secondary w-full" type="submit">Update</button>
-				</form>
-			</div>
-		</aside>
-	</div>
+					{/if}
+				</div>
+			{:else}
+				<div style="grid-column: 1 / -1;"><EmptyState text="Belum ada data subjek." /></div>
+			{/each}
+		</div>
+		<Pagination meta={pageMeta} onPage={changePage} onSize={changePageSize} />
+	</section>
 </AccessPanel>
+
+{#if showCreate && canCreate}
+	<div class="modal-backdrop" role="presentation" onclick={() => showCreate = false}>
+		<section class="modal-panel" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
+			<div class="modal-head">
+				<div>
+					<h3>Tambah Subjek</h3>
+					<p>Tambahkan mata pelajaran baru ke katalog kursus.</p>
+				</div>
+				<button class="btn btn-ghost btn-icon" aria-label="Tutup modal" type="button" onclick={() => showCreate = false}>
+					<Icons name="x" size={18} />
+				</button>
+			</div>
+			<form class="modal-form" onsubmit={(event) => { event.preventDefault(); void createSubject(); }}>
+				<div class="form-group">
+					<label for="subjectName">Nama Subjek</label>
+					<input id="subjectName" bind:value={name} placeholder="Contoh: Pemrograman Java" required />
+				</div>
+				<div class="modal-actions">
+					<button class="btn btn-ghost" type="button" onclick={() => showCreate = false}>Batal</button>
+					<button class="btn btn-primary" type="submit">Tambah</button>
+				</div>
+			</form>
+		</section>
+	</div>
+{/if}
+
+{#if showUpdate && canUpdate}
+	<div class="modal-backdrop" role="presentation" onclick={() => showUpdate = false}>
+		<section class="modal-panel" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
+			<div class="modal-head">
+				<div>
+					<h3>Update Subjek</h3>
+					<p>Ubah nama subjek berdasarkan ID.</p>
+				</div>
+				<button class="btn btn-ghost btn-icon" aria-label="Tutup modal" type="button" onclick={() => showUpdate = false}>
+					<Icons name="x" size={18} />
+				</button>
+			</div>
+			<form class="modal-form" onsubmit={(event) => { event.preventDefault(); void updateSubject(); }}>
+				<div class="form-group">
+					<label for="patchSubjectId">Subject ID</label>
+					<input id="patchSubjectId" bind:value={patchId} type="number" required />
+				</div>
+				<div class="form-group">
+					<label for="patchSubjectName">Nama Baru</label>
+					<input id="patchSubjectName" bind:value={patchName} required />
+				</div>
+				<div class="modal-actions">
+					<button class="btn btn-ghost" type="button" onclick={() => showUpdate = false}>Batal</button>
+					<button class="btn btn-primary" type="submit">Update</button>
+				</div>
+			</form>
+		</section>
+	</div>
+{/if}
+
+<ConfirmModal
+	open={confirmState.open}
+	title={confirmState.title}
+	message={confirmState.message}
+	confirmLabel={confirmState.confirmLabel}
+	onConfirm={runConfirm}
+	onCancel={closeConfirm}
+/>
 
 <style>
 	h3 { font-size: 1.125rem; }
-	.flex-direction-column { flex-direction: column; }
-	.btn-sm { padding: 0.25rem; }
+
+	.subject-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 1rem;
+	}
+
+	.subject-card {
+		position: relative;
+		margin-bottom: 0;
+		padding: 1rem;
+	}
+
+	.subject-icon {
+		width: 32px;
+		height: 32px;
+		background: var(--primary-light);
+		color: var(--primary);
+		border-radius: 6px;
+		display: grid;
+		place-items: center;
+	}
+
+	.subject-name {
+		font-weight: 700;
+	}
+
+	.subject-id {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.btn-sm,
+	.btn-icon {
+		width: 38px;
+		height: 38px;
+		padding: 0;
+	}
+
+	.btn-sm {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+	}
+
+	.danger {
+		color: var(--error);
+	}
+
+	@media (max-width: 560px) {
+		.page-actions .btn {
+			width: 100%;
+		}
+	}
 </style>

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import Icons from '$lib/components/Icons.svelte';
@@ -12,6 +13,8 @@
 	let users = $state<AuthUser[]>([]);
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let session = $state<LoginData | null>(null);
+	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
+	let pendingConfirm: (() => Promise<void>) | null = null;
 	let error = $state('');
 	let success = $state('');
 	let busy = $state('');
@@ -78,18 +81,39 @@
 
 	async function demoteRole(user: AuthUser) {
 		if (hasRole(user, 'ADMIN')) return;
-		if (!confirm(`Turunkan role ${user.email} ke USER saja?`)) return;
 
-		await submit(async () => {
-			busy = `demote-${user.id}`;
-			try {
-				await api<AuthUser>(`/api/auths/users/${user.id}/role`, { method: 'DELETE' });
-				await load();
-				success = `Role ${user.email} berhasil diturunkan ke USER.`;
-			} finally {
-				busy = '';
-			}
+		askConfirm({
+			title: 'Turunkan role?',
+			message: `Role ${user.email} akan diturunkan ke USER saja.`,
+			confirmLabel: 'Turunkan Role'
+		}, async () => {
+			await submit(async () => {
+				busy = `demote-${user.id}`;
+				try {
+					await api<AuthUser>(`/api/auths/users/${user.id}/role`, { method: 'DELETE' });
+					await load();
+					success = `Role ${user.email} berhasil diturunkan ke USER.`;
+				} finally {
+					busy = '';
+				}
+			});
 		});
+	}
+
+	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
+		confirmState = { open: true, title: config.title, message: config.message, confirmLabel: config.confirmLabel ?? 'Ya, lanjutkan' };
+		pendingConfirm = action;
+	}
+
+	function closeConfirm() {
+		confirmState = { ...confirmState, open: false };
+		pendingConfirm = null;
+	}
+
+	function runConfirm() {
+		const action = pendingConfirm;
+		closeConfirm();
+		if (action) void action();
 	}
 
 	function hasRole(user: AuthUser, role: string) {
@@ -199,6 +223,15 @@
 	</div>
 	<Pagination meta={pageMeta} onPage={changePage} onSize={changePageSize} />
 </AccessPanel>
+
+<ConfirmModal
+	open={confirmState.open}
+	title={confirmState.title}
+	message={confirmState.message}
+	confirmLabel={confirmState.confirmLabel}
+	onConfirm={runConfirm}
+	onCancel={closeConfirm}
+/>
 
 <style>
 	button span {

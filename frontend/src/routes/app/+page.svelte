@@ -2,20 +2,17 @@
 	import { onMount } from 'svelte';
 	import Icons from '$lib/components/Icons.svelte';
 	import Notice from '$lib/components/Notice.svelte';
-	import { api, pageItems, paginationMeta } from '$lib/api';
+	import { api, dayLabel, pageItems, paginationMeta, timeLabel } from '$lib/api';
 	import type {
 		Enrollment,
-		Group,
 		GroupSchedule,
 		PageData,
-		PaginationMeta,
-		SubjectMaterial
+		PaginationMeta
 	} from '$lib/types';
 
 	let enrollments = $state<Enrollment[]>([]);
-	let groups = $state<Group[]>([]);
+	let allSchedules = $state<GroupSchedule[]>([]);
 	let schedules = $state<GroupSchedule[]>([]);
-	let materials = $state<SubjectMaterial[]>([]);
 	let enrollmentMeta = $state<PaginationMeta>({ page: 0, size: 4, totalPages: 1, totalElements: 0 });
 	let loading = $state(true);
 	let error = $state('');
@@ -26,22 +23,61 @@
 		loading = true;
 		error = '';
 		try {
-			const [enrollmentPayload, groupPayload, schedulePayload, materialPayload] = await Promise.all([
+			const [enrollmentPayload, schedulePayload] = await Promise.all([
 				api<PageData<Enrollment> | Enrollment[]>('/api/enrollments/me?page=0&size=4&sort=id,desc'),
-				api<PageData<Group> | Group[]>('/api/groups?status=ON_GOING&page=0&size=4&sort=name,asc'),
-				api<PageData<GroupSchedule> | GroupSchedule[]>('/api/group-schedules?page=0&size=5&sort=dayOfWeek,asc'),
-				api<PageData<SubjectMaterial> | SubjectMaterial[]>('/api/subject-materials?page=0&size=5&sort=meetingNumber,asc')
+				api<PageData<GroupSchedule> | GroupSchedule[]>('/api/group-schedules/me?page=0&size=50&sort=dayOfWeek,asc')
 			]);
 			enrollments = pageItems(enrollmentPayload);
-			groups = pageItems(groupPayload);
-			schedules = pageItems(schedulePayload);
-			materials = pageItems(materialPayload);
+			allSchedules = nearestSchedules(pageItems(schedulePayload));
+			schedules = allSchedules.slice(0, 5);
 			enrollmentMeta = paginationMeta(enrollmentPayload, enrollmentMeta);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Gagal memuat dashboard.';
 		} finally {
 			loading = false;
 		}
+	}
+
+	function nearestSchedules(items: GroupSchedule[]) {
+		const todayIndex = new Date().getDay() || 7;
+		return [...items].sort((left, right) => {
+			const leftDelta = dayDelta(left.dayOfWeek, todayIndex);
+			const rightDelta = dayDelta(right.dayOfWeek, todayIndex);
+			if (leftDelta !== rightDelta) return leftDelta - rightDelta;
+			return left.startTime.localeCompare(right.startTime);
+		});
+	}
+
+	function dayDelta(day: string, todayIndex: number) {
+		const dayOrder: Record<string, number> = {
+			MONDAY: 1,
+			TUESDAY: 2,
+			WEDNESDAY: 3,
+			THURSDAY: 4,
+			FRIDAY: 5,
+			SATURDAY: 6,
+			SUNDAY: 7
+		};
+		const dayIndex = dayOrder[day] ?? 7;
+		return (dayIndex - todayIndex + 7) % 7;
+	}
+
+	function schedulesForGroup(groupId: number) {
+		return allSchedules.filter((schedule) => schedule.groupId === groupId);
+	}
+
+	function nextScheduleForGroup(groupId: number) {
+		return schedulesForGroup(groupId)[0];
+	}
+
+	function roleLabel(role: string) {
+		if (role === 'INSTRUCTOR') return 'Instructor';
+		if (role === 'LEARNER') return 'Learner';
+		return role;
+	}
+
+	function initialFrom(text: string) {
+		return text.trim().charAt(0).toUpperCase() || 'K';
 	}
 </script>
 
@@ -51,7 +87,7 @@
 	<div>
 		<span class="eyebrow">Learning Overview</span>
 		<h1>Dashboard Pengguna</h1>
-		<p>Akses cepat ke group, jadwal, materi, dan aktivitas pembelajaran Anda.</p>
+		<p>Akses cepat ke kursus dan jadwal group yang Anda ikuti.</p>
 	</div>
 	<a class="btn btn-primary" href="/app/groups">
 		<span>Lihat Group</span>
@@ -70,16 +106,8 @@
 			<div><span>Kursus Saya</span><strong>{enrollmentMeta.totalElements}</strong></div>
 		</article>
 		<article class="metric">
-			<div class="metric-icon green"><Icons name="layers" size={20} /></div>
-			<div><span>Group Aktif</span><strong>{groups.length}</strong></div>
-		</article>
-		<article class="metric">
 			<div class="metric-icon amber"><Icons name="calendar" size={20} /></div>
-			<div><span>Jadwal Tampil</span><strong>{schedules.length}</strong></div>
-		</article>
-		<article class="metric">
-			<div class="metric-icon rose"><Icons name="book" size={20} /></div>
-			<div><span>Materi Terbaru</span><strong>{materials.length}</strong></div>
+			<div><span>Jadwal Aktif</span><strong>{allSchedules.length}</strong></div>
 		</article>
 	</section>
 
@@ -89,15 +117,33 @@
 				<div><span>Enrolled</span><h2>Kursus Saya</h2></div>
 				<a href="/app/enrollments">Lihat semua</a>
 			</div>
-			<div class="item-list">
+			<div class="course-list">
 				{#each enrollments as item}
-					<a class="list-item" href={`/app/groups/${item.groupId}`}>
-						<div class="list-icon"><Icons name="graduationCap" size={18} /></div>
-						<div>
-							<strong>{item.groupName}</strong>
-							<span>{item.subjectName} · {item.academicYear}</span>
+					{@const nextSchedule = nextScheduleForGroup(item.groupId)}
+					{@const groupScheduleCount = schedulesForGroup(item.groupId).length}
+					<a class="course-card" href={`/app/groups/${item.groupId}`}>
+						<div class="course-mark">{initialFrom(item.groupName)}</div>
+						<div class="course-main">
+							<div class="course-title-row">
+								<strong>{item.groupName}</strong>
+								<span class="badge" class:badge-blue={item.userRole === 'INSTRUCTOR'} class:badge-green={item.userRole === 'LEARNER'}>
+									{roleLabel(item.userRole)}
+								</span>
+							</div>
+							<span class="course-subtitle">{item.subjectName} · {item.academicYear}</span>
+							<div class="course-meta">
+								<span>
+									<Icons name="clock" size={14} />
+									{#if nextSchedule}
+										{dayLabel(nextSchedule.dayOfWeek)} · {timeLabel(nextSchedule.startTime, nextSchedule.endTime)}
+									{:else}
+										Belum ada jadwal
+									{/if}
+								</span>
+								<span>{groupScheduleCount} jadwal aktif</span>
+							</div>
 						</div>
-						<span class="badge badge-blue">{item.userRole}</span>
+						<span class="course-arrow"><Icons name="chevronRight" size={18} /></span>
 					</a>
 				{:else}
 					<div class="empty-inline">Belum ada enrollment aktif.</div>
@@ -116,7 +162,7 @@
 						<div class="list-icon amber"><Icons name="clock" size={18} /></div>
 						<div>
 							<strong>{schedule.groupName}</strong>
-							<span>{schedule.dayOfWeek} · {schedule.startTime.slice(0, 5)}-{schedule.endTime.slice(0, 5)}</span>
+							<span>{dayLabel(schedule.dayOfWeek)} · {timeLabel(schedule.startTime, schedule.endTime)}</span>
 						</div>
 					</div>
 				{:else}
@@ -126,23 +172,6 @@
 		</div>
 	</section>
 
-	<section class="dashboard-section">
-		<div class="section-head">
-			<div><span>Reference</span><h2>Materi Acuan</h2></div>
-			<a href="/app/materials">Buka materi</a>
-		</div>
-		<div class="material-grid">
-			{#each materials as material}
-				<article>
-					<span>Pertemuan {material.meetingNumber}</span>
-					<strong>{material.title}</strong>
-					<p>{material.subjectName || 'Subject'} </p>
-				</article>
-			{:else}
-				<div class="empty-inline">Belum ada materi.</div>
-			{/each}
-		</div>
-	</section>
 {/if}
 
 <style>
@@ -163,8 +192,7 @@
 	}
 
 	.eyebrow,
-	.section-head span,
-	.material-grid article > span {
+	.section-head span {
 		color: var(--primary);
 		font-size: 0.72rem;
 		font-weight: 800;
@@ -174,7 +202,7 @@
 
 	.metric-grid {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 1rem;
 		margin-bottom: 1.25rem;
 	}
@@ -222,9 +250,7 @@
 		height: 42px;
 	}
 
-	.green { color: var(--success); background: var(--success-soft); }
 	.amber { color: var(--warning); background: color-mix(in srgb, var(--warning) 12%, transparent); }
-	.rose { color: var(--error); background: var(--error-soft); }
 
 	.dashboard-grid {
 		display: grid;
@@ -256,6 +282,89 @@
 
 	.item-list {
 		display: grid;
+	}
+
+	.course-list {
+		display: grid;
+		gap: 0.8rem;
+	}
+
+	.course-card {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.9rem;
+		padding: 1rem;
+		border: 1px solid var(--border-light);
+		border-radius: var(--radius);
+		background:
+			linear-gradient(135deg, var(--primary-soft), transparent 52%),
+			var(--bg-surface);
+		color: inherit;
+		text-decoration: none;
+		transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+	}
+
+	.course-card:hover {
+		border-color: var(--primary-border);
+		box-shadow: var(--shadow-md);
+		transform: translateY(-1px);
+	}
+
+	.course-mark {
+		width: 44px;
+		height: 44px;
+		display: grid;
+		place-items: center;
+		border-radius: 14px;
+		background: var(--primary);
+		color: var(--text-on-primary);
+		font-weight: 900;
+		box-shadow: 0 8px 18px var(--primary-shadow);
+	}
+
+	.course-main {
+		min-width: 0;
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.course-title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+
+	.course-title-row strong,
+	.course-subtitle {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.course-subtitle,
+	.course-meta {
+		color: var(--text-muted);
+		font-size: 0.76rem;
+	}
+
+	.course-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem 0.75rem;
+	}
+
+	.course-meta span {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.course-arrow {
+		display: inline-flex;
+		color: var(--text-light);
 	}
 
 	.list-item {
@@ -295,29 +404,6 @@
 		font-size: 0.76rem;
 	}
 
-	.material-grid {
-		display: grid;
-		grid-template-columns: repeat(5, minmax(0, 1fr));
-		gap: 0.75rem;
-	}
-
-	.material-grid article {
-		display: grid;
-		gap: 0.35rem;
-		padding: 1rem;
-		border: 1px solid var(--border-light);
-		border-radius: var(--radius-sm);
-		background: var(--bg-table-head);
-	}
-
-	.material-grid strong {
-		font-size: 0.86rem;
-	}
-
-	.material-grid p {
-		font-size: 0.75rem;
-	}
-
 	.empty-inline {
 		padding: 1rem 0;
 		color: var(--text-muted);
@@ -325,8 +411,7 @@
 	}
 
 	@media (max-width: 1050px) {
-		.metric-grid,
-		.material-grid {
+		.metric-grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
@@ -338,9 +423,21 @@
 			grid-template-columns: 1fr;
 		}
 
-		.metric-grid,
-		.material-grid {
+		.metric-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.course-card {
+			grid-template-columns: auto minmax(0, 1fr);
+		}
+
+		.course-arrow {
+			display: none;
+		}
+
+		.course-title-row {
+			display: grid;
+			justify-content: stretch;
 		}
 	}
 </style>

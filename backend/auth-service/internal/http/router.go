@@ -48,8 +48,8 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/", server.listUsers)
 		r.With(server.requireAnyAuthority("user.read", "user.*")).Get("/{id}", server.getUserByID)
 		r.With(server.requireAnyAuthority("user.update", "user.*")).Patch("/{id}/status", server.updateUserStatus)
-		r.With(server.requireAuthority("user.*")).Patch("/{id}/role", server.setUserRole)
-		r.With(server.requireAuthority("user.*")).Delete("/{id}/role", server.demoteUserRole)
+		r.With(server.requireAnyAuthority("user.update", "user.*")).Patch("/{id}/role", server.setUserRole)
+		r.With(server.requireAnyAuthority("user.delete", "user.*")).Delete("/{id}/role", server.demoteUserRole)
 	})
 
 	router.Route("/api/auths", func(r chi.Router) {
@@ -59,7 +59,7 @@ func NewRouter(cfg config.Config, authSvc *service.AuthService, userSvc *service
 		r.Post("/passwords/reset", server.completePasswordReset)
 		r.Post("/login", server.login)
 		r.Post("/logout", server.logout)
-		r.With(server.requireAuthenticated).Get("/api/auths/dashboard-summary", server.dashboardSummary)
+		r.With(server.requireAnyAuthority("user.*", "user.update", "user.delete")).Get("/dashboard-summary", server.dashboardSummary)
 	})
 
 	return router

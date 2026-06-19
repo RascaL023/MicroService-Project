@@ -39,7 +39,7 @@
 		if (hasAnyAuthority(session, ['group.read', 'group.*'])) {
 			academicItems.push({ href: '/groups', label: 'Grup Belajar', icon: 'layers' });
 		}
-		if (hasAnyAuthority(session, ['group-schedule.read', 'group-schedule.*'])) {
+		if (isAdminSession(session) && hasAnyAuthority(session, ['group-schedule.read', 'group-schedule.*'])) {
 			academicItems.push({ href: '/schedules', label: 'Jadwal Kuliah', icon: 'calendar' });
 		}
 		if (hasAnyAuthority(session, ['course.read', 'enrollment.read', 'enrollment.*'])) {

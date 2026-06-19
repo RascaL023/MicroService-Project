@@ -30,20 +30,33 @@ public class GroupScheduleService {
     private final GroupScheduleRepository groupScheduleRepository;
     private final GroupRepository groupRepository;
     private final ScheduleTemplateRepository scheduleTemplateRepository;
+    private final CurrentUserService currentUserService;
 
     public GroupScheduleService(
         GroupScheduleRepository groupScheduleRepository,
         GroupRepository groupRepository,
-        ScheduleTemplateRepository scheduleTemplateRepository
+        ScheduleTemplateRepository scheduleTemplateRepository,
+        CurrentUserService currentUserService
     ) {
         this.groupScheduleRepository = groupScheduleRepository;
         this.groupRepository = groupRepository;
         this.scheduleTemplateRepository = scheduleTemplateRepository;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
     public Page<GroupSchedule> getAllPaged(Long groupId, String dayOfWeek, Pageable pageable) {
         return groupScheduleRepository.searchActiveSchedules(
+            groupId,
+            normalizeSearchDayOfWeek(dayOfWeek),
+            pageable
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<GroupSchedule> getMinePaged(Long groupId, String dayOfWeek, Pageable pageable) {
+        return groupScheduleRepository.searchActiveSchedulesByUserId(
+            currentUserService.getUserId(),
             groupId,
             normalizeSearchDayOfWeek(dayOfWeek),
             pageable
