@@ -26,6 +26,9 @@ public class CourseUserCache {
     @Column(name = "batch")
     private Integer batch;
 
+    @Column(name = "status")
+    private String status;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 

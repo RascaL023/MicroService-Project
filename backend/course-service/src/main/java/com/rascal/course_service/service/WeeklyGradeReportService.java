@@ -90,9 +90,15 @@ public class WeeklyGradeReportService {
         Set<Long> userIds = enrollments.stream().map(Enrollment::getUserId).collect(Collectors.toCollection(LinkedHashSet::new));
         Set<Long> assessmentIds = assessments.stream().map(Assessment::getId).collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, UserLookupResponse> usersById = courseUserCacheService.lookupByIds(userIds);
-        Map<GradeKey, AssessmentGrade> gradesByKey = lookupGrades(assessmentIds, userIds);
+        List<Enrollment> reportEnrollments = enrollments.stream()
+            .filter(enrollment -> !isDropOut(usersById.get(enrollment.getUserId())))
+            .toList();
+        Set<Long> reportUserIds = reportEnrollments.stream()
+            .map(Enrollment::getUserId)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<GradeKey, AssessmentGrade> gradesByKey = lookupGrades(assessmentIds, reportUserIds);
 
-        ReportData data = buildReportData(normalizedAcademicYear, subject, enrollments, assessments, usersById, gradesByKey);
+        ReportData data = buildReportData(normalizedAcademicYear, subject, reportEnrollments, assessments, usersById, gradesByKey);
         byte[] bytes = writeWorkbook(data);
         String filename = "weekly-grades-%s-%s.xlsx".formatted(
             safeFilename(normalizedAcademicYear),
@@ -290,6 +296,10 @@ public class WeeklyGradeReportService {
     private String learnerName(LearnerRow learner) {
         if (learner.user != null && learner.user.name() != null && !learner.user.name().isBlank()) return learner.user.name();
         return "User #" + learner.userId;
+    }
+
+    private boolean isDropOut(UserLookupResponse user) {
+        return user != null && "DROP_OUT".equalsIgnoreCase(user.status());
     }
 
     private String assessmentColumnKey(Assessment assessment) {

@@ -102,7 +102,9 @@ func (c *UserEventConsumer) replayExisting(ctx context.Context) {
 			Streams: []string{c.stream, lastID},
 			Count:   100,
 		}).Result()
-		if errors.Is(err, redis.Nil) { return }
+		if errors.Is(err, redis.Nil) {
+			return
+		}
 		if err != nil {
 			log.Printf("replay user events: %v", err)
 			return
@@ -139,7 +141,9 @@ func (c *UserEventConsumer) saveCheckpoint(ctx context.Context, messageID string
 func (c *UserEventConsumer) handle(ctx context.Context, values map[string]any) error {
 	eventType := value(values, "type")
 	userID, err := strconv.ParseInt(value(values, "userId"), 10, 64)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	email := normalizeEmail(value(values, "email"))
 
 	switch eventType {
@@ -148,7 +152,9 @@ func (c *UserEventConsumer) handle(ctx context.Context, values map[string]any) e
 		return err
 	case "UserEmailUpdated":
 		_, err = c.users.UpdateEmail(ctx, userID, email)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		_, err = c.sessions.RevokeSubject(ctx, userID)
 		return err
 	case "UserDeleted":
@@ -157,6 +163,15 @@ func (c *UserEventConsumer) handle(ctx context.Context, values map[string]any) e
 		}
 		_, err = c.sessions.RevokeSubject(ctx, userID)
 		return err
+	case "UserStatusChanged":
+		if strings.EqualFold(value(values, "status"), "DROP_OUT") {
+			if err := c.users.MarkDeleted(ctx, userID); err != nil {
+				return err
+			}
+			_, err = c.sessions.RevokeSubject(ctx, userID)
+			return err
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -164,6 +179,8 @@ func (c *UserEventConsumer) handle(ctx context.Context, values map[string]any) e
 
 func value(values map[string]any, key string) string {
 	raw, ok := values[key]
-	if !ok || raw == nil { return "" }
+	if !ok || raw == nil {
+		return ""
+	}
 	return strings.TrimSpace(fmt.Sprint(raw))
 }

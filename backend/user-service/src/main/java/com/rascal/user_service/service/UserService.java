@@ -156,6 +156,8 @@ public class UserService {
 
         if (profileChanged) 
             eventPublisher.userProfileUpdated(saved);
+        if (!Objects.equals(oldStatus, saved.getStatus()))
+            eventPublisher.userStatusChanged(saved, oldStatus.name());
         if (request.email() != null && !oldEmail.equals(saved.getEmail())) 
             eventPublisher.userEmailUpdated(saved, oldEmail);
         return saved;

@@ -14,6 +14,7 @@ import com.rascal.course_service.dto.request.EnrollmentPatchRequest;
 import com.rascal.course_service.dto.request.EnrollmentRequest;
 import com.rascal.course_service.dto.response.EnrollmentResponse;
 import com.rascal.course_service.dto.response.UserLookupResponse;
+import com.rascal.course_service.entity.CourseUserCache;
 import com.rascal.course_service.entity.Enrollment;
 import com.rascal.course_service.entity.Group;
 import com.rascal.course_service.enumerated.CourseRoleEnum;
@@ -101,7 +102,7 @@ public class EnrollmentService {
         Group group = getActiveGroup(request.groupId());
         CourseRoleEnum role = normalizeRole(request.role());
 
-        requireExistingUser(request.userId());
+        requireEnrollableUser(request.userId(), role);
         rejectDuplicateEnrollment(request.userId(), group.getId());
         rejectSecondInstructor(group.getId(), role);
 
@@ -122,9 +123,13 @@ public class EnrollmentService {
         CourseRoleEnum role = request.role() == null ? enrollment.getRole() : normalizeRole(request.role());
         Long targetGroupId = request.groupId() == null ? enrollment.getGroup().getId() : request.groupId();
         Long targetUserId = request.userId() == null ? enrollment.getUserId() : request.userId();
+        boolean membershipChanged =
+            !targetUserId.equals(enrollment.getUserId()) ||
+            !targetGroupId.equals(enrollment.getGroup().getId()) ||
+            role != enrollment.getRole();
 
-        if (!targetUserId.equals(enrollment.getUserId()))
-            requireExistingUser(targetUserId);
+        if (membershipChanged)
+            requireEnrollableUser(targetUserId, role);
         if (role == CourseRoleEnum.INSTRUCTOR
             && (enrollment.getRole() != CourseRoleEnum.INSTRUCTOR || !targetGroupId.equals(enrollment.getGroup().getId())))
             rejectSecondInstructor(targetGroupId, role);
@@ -183,9 +188,18 @@ public class EnrollmentService {
         return courseUserCacheService.lookupByIds(userIds);
     }
 
-    private void requireExistingUser(Long userId) {
-        if (!courseUserCacheService.existsActive(userId))
-            throw new NotFoundException("User not found");
+    private void requireEnrollableUser(Long userId, CourseRoleEnum role) {
+        CourseUserCache user = courseUserCacheService.findActiveById(userId)
+            .orElseThrow(() -> new NotFoundException("User not found"));
+        String status = normalizeUserStatus(user.getStatus());
+        if ("DROP_OUT".equals(status))
+            throw new BadRequestException("Drop out user cannot be enrolled");
+        if ("GRADUATED".equals(status) && role == CourseRoleEnum.LEARNER)
+            throw new BadRequestException("Graduated user cannot be enrolled as learner");
+    }
+
+    private String normalizeUserStatus(String status) {
+        return status == null || status.isBlank() ? "ACTIVE" : status.trim().toUpperCase();
     }
 
     private void rejectDuplicateEnrollment(Long userId, Long groupId) {

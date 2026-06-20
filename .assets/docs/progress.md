@@ -1,5 +1,6 @@
 # LAST:
     - user-service:
+        - add logic on user status
         - profile page:
             - update email
         - add majors
@@ -9,31 +10,24 @@
     - course-service:
         - detail button to popup detail and edit (FE)
         - last login
-    - frontend:
-        - 2nd password input on new password, toggle show password
-        - cleaning UI to button first
-        - toast notification/confirmation
-        - delete kursus saya in /enrollments
-    - course-service: 
-        - weekly grade report by subject
-        - nearest schedule follow to user
 
 # PENDING:
     - course-service: 
         - gradebook better call
-        - subject search (FE)
+        - subject search (FE) [bug]
         - rank system
     - security:
         - log activity
         - rate limiting on reverse proxy
         - laod balancer on api-gateway
+    - user-service: 
+        - user profile picture
 
 # TODO:
     - user-service: 
-        - add logic on user status
-        - user profile picture
         - better excel import template
     - course-service:
+        - better excel export report template
         - learner ack assessments
 
 # ??

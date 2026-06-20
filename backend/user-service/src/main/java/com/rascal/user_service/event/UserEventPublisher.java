@@ -43,6 +43,12 @@ public class UserEventPublisher {
         publish("UserProfileUpdated", user, Map.of());
     }
 
+    public void userStatusChanged(User user, String oldStatus) {
+        publish("UserStatusChanged", user, Map.of(
+            "oldStatus", oldStatus
+        ));
+    }
+
     public void userDeleted(User user) {
         publish("UserDeleted", user, Map.of());
     }

@@ -95,7 +95,8 @@ public class UserEventConsumer {
             return;
         }
 
-        courseUserCacheService.upsert(new UserLookupResponse(userId, name, gender, batch));
+        String status = blankToNull(string(payload.get("status")));
+        courseUserCacheService.upsert(new UserLookupResponse(userId, name, gender, batch, status));
     }
 
     private void ensureGroup() {

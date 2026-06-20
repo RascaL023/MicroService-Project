@@ -3,6 +3,7 @@ package com.rascal.course_service.service;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -42,6 +43,11 @@ public class CourseUserCacheService {
         return courseUserCacheRepository.existsByIdAndDeletedAtIsNull(userId);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<CourseUserCache> findActiveById(Long userId) {
+        return courseUserCacheRepository.findByIdAndDeletedAtIsNull(userId);
+    }
+
     public void upsert(UserLookupResponse user) {
         CourseUserCache cache = courseUserCacheRepository.findById(user.id())
             .orElseGet(CourseUserCache::new);
@@ -50,6 +56,7 @@ public class CourseUserCacheService {
         cache.setName(user.name());
         cache.setGender(user.gender());
         cache.setBatch(user.batch());
+        cache.setStatus(normalizeStatus(user.status()));
         cache.setDeletedAt(null);
         cache.setSyncedAt(LocalDateTime.now());
 
@@ -72,8 +79,13 @@ public class CourseUserCacheService {
             cache.getId(),
             cache.getName(),
             cache.getGender(),
-            cache.getBatch()
+            cache.getBatch(),
+            normalizeStatus(cache.getStatus())
         );
+    }
+
+    private String normalizeStatus(String status) {
+        return status == null || status.isBlank() ? "ACTIVE" : status.trim().toUpperCase();
     }
 
 }
