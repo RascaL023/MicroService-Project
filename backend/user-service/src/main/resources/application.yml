@@ -50,5 +50,5 @@ app:
   excel:
     max-row: 100
     user-import:
-      header-start-row: 0
+      header-start-row: 3
       columns: '{"name":"nama", "email":"email", "gender":"jeniskelamin", "major":"jurusan"}'

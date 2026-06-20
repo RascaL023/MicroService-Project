@@ -3,8 +3,11 @@ package com.rascal.user_service.controller;
 import java.util.Collection;
 import java.util.List;
 
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +37,9 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
+
+    private static final String USER_IMPORT_TEMPLATE = "templates/users-import-template.xlsx";
+    private static final String EXCEL_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private final UserService userService;
     private final UserBulkImportService userBulkImportService;
@@ -113,6 +119,17 @@ public class UserController {
             HttpStatus.CREATED,
             userBulkImportService.importExcel(batch, file)
         );
+    }
+
+    @GetMapping(value = "/bulk/excel/template", produces = EXCEL_MEDIA_TYPE)
+    @PreAuthorize("hasAnyAuthority('user.*', 'user.create')")
+    public ResponseEntity<Resource> downloadBulkExcelTemplate() {
+        Resource template = new ClassPathResource(USER_IMPORT_TEMPLATE);
+
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"users-import-template.xlsx\"")
+            .contentType(MediaType.parseMediaType(EXCEL_MEDIA_TYPE))
+            .body(template);
     }
 
 

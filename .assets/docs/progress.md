@@ -1,5 +1,6 @@
 # LAST:
     - user-service:
+        - better excel import, and downloadable template
         - add logic on user status
         - profile page:
             - update email
@@ -24,8 +25,6 @@
         - user profile picture
 
 # TODO:
-    - user-service: 
-        - better excel import template
     - course-service:
         - better excel export report template
         - learner ack assessments

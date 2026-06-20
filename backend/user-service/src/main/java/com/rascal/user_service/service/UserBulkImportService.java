@@ -51,7 +51,7 @@ public class UserBulkImportService {
     private int maxImportRows;
     @Value("#{${app.excel.user-import.columns:{name:'name',email:'email',gender:'gender',major:'major'}}}")
     private Map<String, String> columnHeaders;
-    @Value("${app.excel.user-import.header-start-row:0}")
+    @Value("${app.excel.user-import.header-start-row:4}")
     private int headerStartRow;
     @Value("${spring.servlet.multipart.max-file-size:12MB}")
     private DataSize maxImportFileSize;

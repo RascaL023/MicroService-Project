@@ -312,9 +312,42 @@
 		return `${(file.size / 1024 / 1024).toFixed(2)} MB`;
 	}
 
+	async function downloadImportTemplate() {
+		await submit(async () => {
+			busy = 'template';
+			try {
+				const headers = new Headers();
+				const currentSession = readSession();
+				if (currentSession?.sessionId) headers.set('Authorization', `Session ${currentSession.sessionId}`);
+
+				const response = await fetch('/api/users/bulk/excel/template', { headers });
+				if (!response.ok) throw new Error('Gagal download template import user.');
+
+				const blob = await response.blob();
+				const url = URL.createObjectURL(blob);
+				const anchor = document.createElement('a');
+				anchor.href = url;
+				anchor.download = filenameFromDisposition(response.headers.get('Content-Disposition')) ?? 'users-import-template.xlsx';
+				document.body.appendChild(anchor);
+				anchor.click();
+				anchor.remove();
+				URL.revokeObjectURL(url);
+				success = 'Template import berhasil didownload.';
+			} finally {
+				busy = '';
+			}
+		});
+	}
+
 	function csvEscape(value: unknown) {
 		const text = String(value ?? '');
 		return `"${text.replaceAll('"', '""')}"`;
+	}
+
+	function filenameFromDisposition(disposition: string | null) {
+		if (!disposition) return null;
+		const match = disposition.match(/filename="?([^";]+)"?/i);
+		return match?.[1] ?? null;
 	}
 
 	function downloadImportReport() {
@@ -353,6 +386,10 @@
 
 	{#if canCreate}
 		<div class="page-actions">
+			<button class="btn btn-ghost" type="button" disabled={busy === 'template'} onclick={downloadImportTemplate}>
+				<Icons name="download" size={17} />
+				<span>{busy === 'template' ? 'Mengunduh...' : 'Template'}</span>
+			</button>
 			<button class="btn btn-secondary" type="button" onclick={openImport}>
 				<Icons name="upload" size={17} />
 				<span>Import Excel</span>
@@ -627,8 +664,12 @@
 						<Icons name="file" size={18} />
 					<div>
 						<strong>Format kolom Excel</strong>
-						<p>Baris pertama wajib berisi header: nama, email, jeniskelamin, jurusan. Batch dipilih dari form ini, jurusan diisi per row memakai ID jurusan seperti TI.</p>
+						<p>Gunakan template resmi. Header berada di baris ke-4 dengan kolom: nama, email, jeniskelamin, jurusan. Batch dipilih dari form ini, jurusan diisi per row memakai ID jurusan seperti TI.</p>
 					</div>
+					<button class="btn btn-secondary" type="button" disabled={busy === 'template'} onclick={downloadImportTemplate}>
+						<Icons name="download" size={16} />
+						<span>{busy === 'template' ? 'Mengunduh...' : 'Download Template'}</span>
+					</button>
 				</div>
 
 				<label>
@@ -872,7 +913,7 @@
 
 	.format-box {
 		display: grid;
-		grid-template-columns: auto 1fr;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		gap: 0.75rem;
 		align-items: start;
 		padding: 0.875rem;
@@ -890,6 +931,11 @@
 		font-size: 0.875rem;
 		line-height: 1.5;
 		margin: 0.25rem 0 0;
+	}
+
+	.format-box .btn {
+		align-self: center;
+		white-space: nowrap;
 	}
 
 	.file-zone {
@@ -1018,6 +1064,15 @@
 
 		.action-cluster {
 			display: grid;
+		}
+
+		.format-box {
+			grid-template-columns: auto minmax(0, 1fr);
+		}
+
+		.format-box .btn {
+			grid-column: 1 / -1;
+			width: 100%;
 		}
 	}
 </style>
