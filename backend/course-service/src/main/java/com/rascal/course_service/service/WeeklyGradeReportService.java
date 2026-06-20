@@ -29,6 +29,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -155,7 +156,7 @@ public class WeeklyGradeReportService {
             LinkedHashMap<String, AssessmentColumn> columns = columnMaps.get(assessment.getType());
             AssessmentColumn column = columns.computeIfAbsent(
                 assessmentColumnKey(assessment),
-                key -> new AssessmentColumn(assessmentTitle(assessment))
+                key -> new AssessmentColumn(assessmentColumnLabel(assessment))
             );
             column.assessmentIds.add(assessment.getId());
         }
@@ -185,6 +186,10 @@ public class WeeklyGradeReportService {
         return Comparator
             .comparing(Assessment::getType)
             .thenComparing(
+                this::assessmentMeetingNumber,
+                Comparator.nullsLast(Comparator.naturalOrder())
+            )
+            .thenComparing(
                 Assessment::getDueAt,
                 Comparator.nullsLast(Comparator.naturalOrder())
             )
@@ -193,6 +198,12 @@ public class WeeklyGradeReportService {
                 Comparator.nullsLast(Comparator.naturalOrder())
             )
             .thenComparing(Assessment::getId);
+    }
+
+    private Integer assessmentMeetingNumber(Assessment assessment) {
+        if (assessment == null || assessment.getGroupMeeting() == null) return null;
+        if (assessment.getGroupMeeting().getSubjectMaterial() == null) return null;
+        return assessment.getGroupMeeting().getSubjectMaterial().getMeetingNumber();
     }
 
     private Map<AssessmentTypeEnum, LinkedHashMap<String, AssessmentColumn>> emptyColumnMaps() {
@@ -222,18 +233,23 @@ public class WeeklyGradeReportService {
         List<AssessmentColumn> columns
     ) {
         Sheet sheet = workbook.createSheet(uniqueSheetName(workbook, type.getDisplayName()));
-        sheet.setDisplayGridlines(false);
+        sheet.setDisplayGridlines(true);
         configureSheet(sheet, columns.size());
+        sheet.showInPane(0, 0);
+        sheet.setActiveCell(new CellAddress(0, 0));
         int rowIndex = 0;
 
         rowIndex = writeMeta(sheet, styles, rowIndex, data);
         rowIndex++;
 
         Row header = sheet.createRow(rowIndex++);
+        header.setHeightInPoints(22);
         int col = 0;
         writeCell(header, col++, "No", styles.header);
         writeCell(header, col++, "Nama Peserta", styles.header);
-        for (AssessmentColumn column : columns) writeCell(header, col++, column.title, styles.header);
+        for (AssessmentColumn column : columns) {
+            writeCell(header, col++, column.title, styles.header);
+        }
         writeCell(header, col++, "Rata - rata", styles.header);
         writeCell(header, col, "Grade", styles.header);
 
@@ -355,14 +371,21 @@ public class WeeklyGradeReportService {
     }
 
     private String assessmentColumnKey(Assessment assessment) {
-        return assessmentTitle(assessment)
+        return assessmentColumnLabel(assessment)
             .replaceAll("\\s+", " ")
             .toLowerCase(Locale.ROOT);
     }
 
-    private String assessmentTitle(Assessment assessment) {
+    private String assessmentColumnLabel(Assessment assessment) {
+        if (assessment == null || assessment.getType() == null) return "Nilai";
+        if (assessment.getType() == AssessmentTypeEnum.MIDTERM || assessment.getType() == AssessmentTypeEnum.FINAL_EXAM)
+            return "Nilai";
+
+        Integer meetingNumber = assessmentMeetingNumber(assessment);
+        if (meetingNumber != null) return assessment.getType().getDisplayName() + " " + meetingNumber;
+
         if (assessment.getTitle() != null && !assessment.getTitle().isBlank()) return assessment.getTitle().trim();
-        return "Assessment #" + assessment.getId();
+        return assessment.getType().getDisplayName();
     }
 
     private String uniqueSheetName(Workbook workbook, String rawName) {
