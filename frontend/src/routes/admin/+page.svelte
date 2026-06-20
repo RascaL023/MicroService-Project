@@ -19,9 +19,11 @@
 	let unavailable = $state<string[]>([]);
 
 	const canManageUsers = $derived(hasAnyAuthority(session, ['user.*']));
+	const canReadUserSummary = $derived(hasAnyAuthority(session, ['user.read', 'user.*', 'batch.read', 'batch.*', 'major.read', 'major.*']));
 	const canReadGroups = $derived(hasAnyAuthority(session, ['group.read', 'group.*']));
 	const canCreateUsers = $derived(hasAnyAuthority(session, ['user.create', 'user.*']));
 	const canCreateBatches = $derived(hasAnyAuthority(session, ['batch.create', 'batch.*']));
+	const canCreateMajors = $derived(hasAnyAuthority(session, ['major.create', 'major.*']));
 	const canCreateGroups = $derived(hasAnyAuthority(session, ['group.create', 'group.*']));
 	const canManageSchedules = $derived(hasAnyAuthority(session, ['group-schedule.create', 'group-schedule.*']));
 	const canManageEnrollments = $derived(hasAnyAuthority(session, ['enrollment.create', 'enrollment.*']));
@@ -43,6 +45,8 @@
 				'status akun',
 				(value) => authSummary = value
 			));
+		}
+		if (canReadUserSummary) {
 			tasks.push(loadSummary<UserDashboardSummary>(
 				'/api/users/dashboard-summary',
 				'data user',
@@ -174,6 +178,10 @@
 					<div class="metric-icon blue"><Icons name="layers" size={20} /></div>
 					<div><span>Batch</span><strong>{userSummary?.totalBatches ?? '-'}</strong></div>
 				</article>
+				<article class="metric-card">
+					<div class="metric-icon violet"><Icons name="graduationCap" size={20} /></div>
+					<div><span>Jurusan</span><strong>{userSummary?.totalMajors ?? '-'}</strong></div>
+				</article>
 			</div>
 		</section>
 	{/if}
@@ -207,6 +215,9 @@
 				{/if}
 				{#if canCreateBatches}
 					<a href="/admin/batches"><Icons name="layers" size={19} /><div><strong>Buat Batch</strong><span>Siapkan angkatan baru</span></div></a>
+				{/if}
+				{#if canCreateMajors}
+					<a href="/admin/majors"><Icons name="graduationCap" size={19} /><div><strong>Buat Jurusan</strong><span>Kelola master program studi</span></div></a>
 				{/if}
 				{#if canCreateGroups}
 					<a href="/admin/groups"><Icons name="graduationCap" size={19} /><div><strong>Buat Group</strong><span>Atur subject dan periode</span></div></a>

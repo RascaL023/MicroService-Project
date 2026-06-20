@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -8,15 +10,17 @@
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import { api, hasAnyAuthority, pageItems, paginationMeta, readSession } from '$lib/api';
-	import type { Batch, LoginData, PageData, PaginationMeta, User, UserBulkImportResult } from '$lib/types';
+	import type { Batch, LoginData, Major, PageData, PaginationMeta, User, UserBulkImportResult } from '$lib/types';
 
 	let users = $state<User[]>([]);
+	let selectedUser = $state<User | null>(null);
 	let batches = $state<Batch[]>([]);
+	let majors = $state<Major[]>([]);
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let session = $state<LoginData | null>(null);
-	let filters = $state({ name: '', batch: '', sortBy: 'id', sortDirection: 'desc' });
-	let form = $state({ name: '', email: '', batch: '', gender: 'L' });
-	let patch = $state({ id: '', name: '', email: '', batch: '', gender: 'L' });
+	let filters = $state({ name: '', batch: '', major: '', sortBy: 'id', sortDirection: 'desc' });
+	let form = $state({ name: '', email: '', batch: '', major: '', gender: 'L' });
+	let patch = $state({ id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '' });
 	let showCreate = $state(false);
 	let showEdit = $state(false);
 	let showImport = $state(false);
@@ -31,8 +35,9 @@
 	let busy = $state('');
 
 	const canCreate = $derived(hasAnyAuthority(session, ['user.create', 'user.*']));
-	const canUpdate = $derived(hasAnyAuthority(session, ['user.update', 'user.*']));
+	const canUpdateAll = $derived(hasAnyAuthority(session, ['user.update', 'user.*']));
 	const canDelete = $derived(hasAnyAuthority(session, ['user.delete', 'user.*']));
+	const portalPrefix = $derived(page.url.pathname.startsWith('/admin/') ? '/admin' : '');
 
 	onMount(() => {
 		session = readSession();
@@ -52,7 +57,7 @@
 	async function loadPage() {
 		loading = true;
 		try {
-			await Promise.all([loadUsers(), loadBatches()]);
+			await Promise.all([loadUsers(), loadBatches(), loadMajors()]);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Gagal memuat user.';
 		} finally {
@@ -68,6 +73,7 @@
 		});
 		if (filters.name.trim()) query.set('name', filters.name.trim());
 		if (filters.batch) query.set('batch', filters.batch);
+		if (filters.major) query.set('major', filters.major);
 		const payload = await api<PageData<User> | User[]>(`/api/users?${query}`);
 		users = pageItems(payload);
 		pageMeta = paginationMeta(payload, pageMeta);
@@ -77,6 +83,12 @@
 		const payload = await api<PageData<Batch> | Batch[]>('/api/batches?sort=id,desc');
 		batches = pageItems(payload);
 		if (!form.batch && batches[0]) form.batch = String(batches[0].id);
+	}
+
+	async function loadMajors() {
+		const payload = await api<PageData<Major> | Major[]>('/api/majors?sort=name,asc&size=100');
+		majors = pageItems(payload);
+		if (!form.major && majors[0]) form.major = majors[0].id;
 	}
 
 	async function createUser() {
@@ -89,10 +101,11 @@
 						name: form.name,
 						email: form.email,
 						batch: Number(form.batch),
+						major: form.major,
 						gender: form.gender
 					})
 				});
-				form = { name: '', email: '', batch: form.batch, gender: 'L' };
+				form = { name: '', email: '', batch: form.batch, major: form.major, gender: 'L' };
 				showCreate = false;
 				await loadUsers();
 				success = 'User berhasil ditambahkan.';
@@ -107,14 +120,16 @@
 			busy = 'patch';
 			try {
 				const body: Record<string, unknown> = {};
-				if (patch.name.trim()) body.name = patch.name.trim();
+				if (canUpdateAll && patch.name.trim()) body.name = patch.name.trim();
 				if (patch.email.trim()) body.email = patch.email.trim();
-				if (patch.batch) body.batch = Number(patch.batch);
-				if (patch.gender) body.gender = patch.gender;
+				if (canUpdateAll && patch.batch) body.batch = Number(patch.batch);
+				if (canUpdateAll && patch.major) body.major = patch.major;
+				if (canUpdateAll && patch.gender) body.gender = patch.gender;
+				if (canUpdateAll && patch.graduatedAt) body.graduatedAt = patch.graduatedAt;
 
 				await api<User>(`/api/users/${patch.id}`, { method: 'PATCH', body: JSON.stringify(body) });
 				showEdit = false;
-				patch = { id: '', name: '', email: '', batch: '', gender: 'L' };
+				patch = { id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '' };
 				await loadUsers();
 				success = 'User berhasil diupdate.';
 			} finally {
@@ -141,7 +156,6 @@
 				error = 'Pilih batch tujuan import.';
 				return;
 			}
-
 			busy = 'import';
 			try {
 				const data = new FormData();
@@ -194,17 +208,33 @@
 	}
 
 	function openCreate() {
-		form = { name: '', email: '', batch: form.batch || (batches[0] ? String(batches[0].id) : ''), gender: 'L' };
+		form = {
+			name: '',
+			email: '',
+			batch: form.batch || (batches[0] ? String(batches[0].id) : ''),
+			major: form.major || (majors[0] ? majors[0].id : ''),
+			gender: 'L'
+		};
 		showCreate = true;
 	}
 
-	function openEdit(user: User) {
+	function openDetail(user: User) {
+		void goto(`${portalPrefix}/users/${user.id}`);
+	}
+
+	async function openEdit(user: User) {
+		if (!canManageUser(user)) return;
+		const detailPayload = await api<User>(`/api/users/${user.id}`);
+		const detail = detailPayload.data ?? user;
+		selectedUser = detail;
 		patch = {
-			id: String(user.id),
-			name: user.name,
-			email: user.email,
-			batch: String(user.batch),
-			gender: genderCode(user.gender)
+			id: String(detail.id),
+			name: detail.name,
+			email: detail.email ?? '',
+			batch: batchIdFromLabel(detail.batch),
+			major: detail.majorId ?? '',
+			gender: genderCode(detail.gender ?? 'L'),
+			graduatedAt: detail.graduatedAt ? detail.graduatedAt.slice(0, 16) : ''
 		};
 		showEdit = true;
 	}
@@ -243,6 +273,18 @@
 
 	function genderLabel(value: string) {
 		return genderCode(value) === 'L' ? 'Laki-laki' : 'Perempuan';
+	}
+
+	function batchIdFromLabel(value: string) {
+		return value.split(' - ')[0] ?? value;
+	}
+
+	function canManageUser(user: User) {
+		return canUpdateAll || user.id === session?.userId || canDelete;
+	}
+
+	function canEditMainFields() {
+		return canUpdateAll;
 	}
 
 	function isExcelFile(file: File) {
@@ -326,12 +368,19 @@
 				</select>
 			</label>
 			<label>
+				<span>Jurusan</span>
+				<select bind:value={filters.major}>
+					<option value="">Semua jurusan</option>
+					{#each majors as major}
+						<option value={major.id}>{major.id} - {major.name}</option>
+					{/each}
+				</select>
+			</label>
+			<label>
 				<span>Urutkan</span>
 				<select bind:value={filters.sortBy}>
 					<option value="id">Terbaru</option>
 					<option value="name">Nama</option>
-					<option value="email">Email</option>
-					<option value="status">Status</option>
 				</select>
 			</label>
 			<label>
@@ -360,33 +409,27 @@
 						<div class="avatar">{user.name.slice(0, 1).toUpperCase()}</div>
 						<div class="user-text">
 							<h3>{user.name}</h3>
-							<p>{user.email}</p>
+							<p>{user.majorName ?? 'Jurusan belum diisi'}</p>
 						</div>
 					</div>
 
 					<div class="user-meta">
 						<span class="badge badge-gray">Batch {user.batch}</span>
-						<span>{genderLabel(user.gender)}</span>
-						<span class="badge" class:badge-green={user.status === 'ACTIVE'} class:badge-red={user.status !== 'ACTIVE'}>
-							{user.status}
-						</span>
+						<span class="badge badge-blue">{user.majorId ?? '-'}</span>
 					</div>
 
-					{#if canUpdate || canDelete}
-						<div class="user-actions">
-							{#if canUpdate}
-								<button class="btn btn-secondary" type="button" onclick={() => openEdit(user)}>
-									<Icons name="edit" size={16} />
-									<span>Edit</span>
-								</button>
-							{/if}
-							{#if canDelete}
-								<button class="btn btn-ghost danger icon-btn" type="button" aria-label="Hapus user" onclick={() => deleteUser(user)}>
-									<Icons name="x" size={17} />
-								</button>
-							{/if}
-						</div>
-					{/if}
+					<div class="user-actions">
+						<button class="btn btn-ghost" type="button" onclick={() => openDetail(user)}>
+							<Icons name="file" size={16} />
+							<span>Detail</span>
+						</button>
+						{#if canManageUser(user)}
+							<button class="btn btn-secondary" type="button" onclick={() => void openEdit(user)}>
+								<Icons name="edit" size={16} />
+								<span>Manage</span>
+							</button>
+						{/if}
+					</div>
 				</article>
 			{/each}
 		</section>
@@ -432,6 +475,15 @@
 					</select>
 				</label>
 				<label>
+					<span>Jurusan</span>
+					<select bind:value={form.major} required>
+						<option value="">Pilih jurusan</option>
+						{#each majors as major}
+							<option value={major.id}>{major.id} - {major.name}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
 					<span>Gender</span>
 					<select bind:value={form.gender}>
 						<option value="L">Laki-laki</option>
@@ -449,7 +501,7 @@
 	</div>
 {/if}
 
-{#if showEdit && canUpdate}
+{#if showEdit && selectedUser}
 	<div class="modal-backdrop" role="presentation" onclick={() => showEdit = false}>
 		<section
 			class="modal-panel"
@@ -462,7 +514,7 @@
 			<div class="modal-head">
 				<div>
 					<span class="nav-label flush">Update</span>
-					<h3>Edit User</h3>
+					<h3>Manage User</h3>
 				</div>
 				<button class="btn btn-ghost icon-btn" type="button" onclick={() => showEdit = false}>
 					<Icons name="x" size={18} />
@@ -472,7 +524,7 @@
 			<form class="modal-form" onsubmit={(event) => { event.preventDefault(); void patchUser(); }}>
 				<label>
 					<span>Nama Lengkap</span>
-					<input bind:value={patch.name} required />
+					<input bind:value={patch.name} disabled={!canEditMainFields()} required />
 				</label>
 				<label>
 					<span>Email</span>
@@ -480,24 +532,46 @@
 				</label>
 				<label>
 					<span>Batch</span>
-					<select bind:value={patch.batch} required>
+					<select bind:value={patch.batch} disabled={!canEditMainFields()} required>
 						{#each batches as batch}
 							<option value={batch.id}>Batch {batch.id}</option>
 						{/each}
 					</select>
 				</label>
 				<label>
+					<span>Jurusan</span>
+					<select bind:value={patch.major} disabled={!canEditMainFields()} required>
+						{#each majors as major}
+							<option value={major.id}>{major.id} - {major.name}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
 					<span>Gender</span>
-					<select bind:value={patch.gender}>
+					<select bind:value={patch.gender} disabled={!canEditMainFields()}>
 						<option value="L">Laki-laki</option>
 						<option value="P">Perempuan</option>
 					</select>
 				</label>
+				<label>
+					<span>Tanggal Lulus</span>
+					<input bind:value={patch.graduatedAt} disabled={!canEditMainFields()} type="datetime-local" />
+				</label>
 				<div class="modal-actions">
-					<button class="btn btn-ghost" type="button" onclick={() => showEdit = false}>Batal</button>
-					<button class="btn btn-primary" type="submit" disabled={busy === 'patch'}>
-						{busy === 'patch' ? 'Menyimpan...' : 'Simpan'}
-					</button>
+					<div class="action-cluster">
+						{#if canDelete}
+							<button class="btn btn-ghost danger" type="button" onclick={() => selectedUser && deleteUser(selectedUser)}>
+								<Icons name="x" size={16} />
+								<span>Hapus</span>
+							</button>
+						{/if}
+					</div>
+					<div class="action-cluster">
+						<button class="btn btn-ghost" type="button" onclick={() => showEdit = false}>Batal</button>
+						<button class="btn btn-primary" type="submit" disabled={busy === 'patch'}>
+							{busy === 'patch' ? 'Menyimpan...' : 'Simpan'}
+						</button>
+					</div>
 				</div>
 			</form>
 		</section>
@@ -526,10 +600,10 @@
 
 			<form class="modal-form" onsubmit={(event) => { event.preventDefault(); void importUsers(); }}>
 				<div class="format-box">
-					<Icons name="file" size={18} />
+						<Icons name="file" size={18} />
 					<div>
 						<strong>Format kolom Excel</strong>
-						<p>Baris pertama wajib berisi header: name, email, gender. Batch dipilih dari form ini dan berlaku untuk seluruh file.</p>
+						<p>Baris pertama wajib berisi header: nama, email, jeniskelamin, jurusan. Batch dipilih dari form ini, jurusan diisi per row memakai ID jurusan seperti TI.</p>
 					</div>
 				</div>
 

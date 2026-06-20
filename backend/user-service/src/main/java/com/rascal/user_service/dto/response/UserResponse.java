@@ -3,8 +3,7 @@ package com.rascal.user_service.dto.response;
 public record UserResponse(
     Long id,
     String name,
-    String email,
-    String batch,
-    String gender,
-    String status
+    String majorId,
+    String majorName,
+    String batch
 ) { }

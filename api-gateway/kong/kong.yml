@@ -17,6 +17,7 @@ services:
         paths:
           - /api/users
           - /api/batches
+          - /api/majors
         strip_path: false
         plugins:
           - name: my-session-injector

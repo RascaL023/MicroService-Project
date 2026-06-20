@@ -1,4 +1,6 @@
 # LAST:
+    - user-service:
+        - add majors
     - auth-service:
         - after activation, need manual login
     - course-service:
@@ -18,15 +20,19 @@
         - gradebook better call
         - subject search (FE)
         - rank system
-    - user-service: 
-        - profile page:
-            - CRUD allowed
-            - status = ACTIVE/GRADUATED
-            - user profile picture
-        - more user data
-        - better excel import template
+    - security:
+        - log activity
+        - rate limiting on reverse proxy
+        - laod balancer on api-gateway
 
 # TODO:
+    - user-service: 
+        - profile page:
+            - update email
+            - user profile picture
+        - more user data:
+            - status = ACTIVE/GRADUATED/DROP_OUT
+        - better excel import template
     - course-service:
         - learner ack assessments
 

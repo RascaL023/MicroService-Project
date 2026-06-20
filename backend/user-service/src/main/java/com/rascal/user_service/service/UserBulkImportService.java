@@ -35,6 +35,7 @@ import com.rascal.user_service.dto.response.UserImportRowReport;
 import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.event.UserEventPublisher;
 import com.rascal.user_service.repository.BatchRepository;
+import com.rascal.user_service.repository.MajorRepository;
 import com.rascal.user_service.repository.UserRepository;
 
 import id.rascal.response_kit.exception.BadRequestException;
@@ -47,7 +48,7 @@ public class UserBulkImportService {
 
     @Value("${app.excel.max-row:100}")
     private int maxImportRows;
-    @Value("#{${app.excel.user-import.columns:{name:'name',email:'email',gender:'gender'}}}")
+    @Value("#{${app.excel.user-import.columns:{name:'name',email:'email',gender:'gender',major:'major'}}}")
     private Map<String, String> columnHeaders;
     @Value("${app.excel.user-import.header-start-row:0}")
     private int headerStartRow;
@@ -60,17 +61,20 @@ public class UserBulkImportService {
     private final JdbcTemplate jdbcTemplate;
     private final UserRepository userRepository;
     private final BatchRepository batchRepository;
+    private final MajorRepository majorRepository;
     private final UserEventPublisher eventPublisher;
 
     public UserBulkImportService(
         JdbcTemplate jdbcTemplate,
         UserRepository userRepository,
         BatchRepository batchRepository,
+        MajorRepository majorRepository,
         UserEventPublisher eventPublisher
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.userRepository = userRepository;
         this.batchRepository = batchRepository;
+        this.majorRepository = majorRepository;
         this.eventPublisher = eventPublisher;
     }
 
@@ -83,8 +87,22 @@ public class UserBulkImportService {
 
         List<UserImportRowReport> reports = new ArrayList<>();
         List<ImportRow> validRows = readRows(file, reports);
+        Map<String, String> activeMajorIds = getActiveMajorIds(validRows);
+        List<ImportRow> insertableRows = new ArrayList<>();
+        for (ImportRow row : validRows) {
+            if (!activeMajorIds.containsKey(row.majorId())) {
+                reports.add(new UserImportRowReport(
+                    row.excelRow(),
+                    row.email(),
+                    "FAILED",
+                    "Major not found: " + row.majorId()
+                ));
+                continue;
+            }
+            insertableRows.add(row);
+        }
 
-        Map<String, Long> inserted = bulkInsert(batch, validRows);
+        Map<String, Long> inserted = bulkInsert(batch, insertableRows);
         Set<Long> insertedIds = new HashSet<>(inserted.values());
         if (!insertedIds.isEmpty()) {
             userRepository.findByIdInAndDeletedAtIsNull(insertedIds)
@@ -93,7 +111,7 @@ public class UserBulkImportService {
 
         int createdCount = 0;
         int skippedCount = 0;
-        for (ImportRow row : validRows) {
+        for (ImportRow row : insertableRows) {
             if (inserted.containsKey(row.email())) {
                 ++createdCount;
                 reports.add(new UserImportRowReport(
@@ -152,11 +170,12 @@ public class UserBulkImportService {
                     String name = normalizeName(cell(row, columns, formatter, "name"));
                     String email = normalizeEmail(cell(row, columns, formatter, "email"));
                     Character gender = parseGender(cell(row, columns, formatter, "gender"));
+                    String majorId = normalizeMajorId(cell(row, columns, formatter, "major"));
 
                     if (!emailsInFile.add(email))
                         throw new BadRequestException("Duplicate email in Excel file");
 
-                    rows.add(new ImportRow(excelRow, name, email, gender));
+                    rows.add(new ImportRow(excelRow, name, email, gender, majorId));
                 } catch (RuntimeException err) {
                     reports.add(new UserImportRowReport(
                         excelRow,
@@ -177,12 +196,12 @@ public class UserBulkImportService {
         if (rows.isEmpty()) return Map.of();
 
         StringBuilder sqlQuery = new StringBuilder("""
-            INSERT INTO users (name, email, gender, status, batch_id, created_at)
+            INSERT INTO users (name, email, gender, status, batch_id, major_id, created_at)
             VALUES
         """);
         for (int index = 0; index < rows.size(); index++) {
             if (index > 0) sqlQuery.append(", ");
-            sqlQuery.append("(?, ?, ?, ?, ?, ?)");
+            sqlQuery.append("(?, ?, ?, ?, ?, ?, ?)");
         }
         sqlQuery.append("""
              ON CONFLICT (email) WHERE deleted_at IS NULL DO NOTHING
@@ -199,6 +218,7 @@ public class UserBulkImportService {
                 statement.setString(++param, String.valueOf(row.gender()));
                 statement.setString(++param, STATUS_ACTIVE);
                 statement.setInt(++param, batch.getId());
+                statement.setString(++param, row.majorId());
                 statement.setObject(++param, now);
             }
 
@@ -214,6 +234,15 @@ public class UserBulkImportService {
         };
 
         return jdbcTemplate.query(creator, extractor);
+    }
+
+    private Map<String, String> getActiveMajorIds(List<ImportRow> rows) {
+        if (rows.isEmpty()) return Map.of();
+
+        Set<String> majorIds = new HashSet<>();
+        rows.forEach(row -> majorIds.add(row.majorId()));
+        return majorRepository.findByIdInAndDeletedAtIsNull(majorIds).stream()
+            .collect(HashMap::new, (map, major) -> map.put(major.getId(), major.getId()), HashMap::putAll);
     }
 
     private void validateBatchId(Integer batchId) {
@@ -317,6 +346,14 @@ public class UserBulkImportService {
         throw new BadRequestException("Gender must be L or P");
     }
 
+    private String normalizeMajorId(String majorId) {
+        String normalized = majorId == null ? "" : majorId.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isBlank())
+            throw new BadRequestException("Major must be filled");
+
+        return normalized;
+    }
+
     private String normalizeHeader(String header) {
         return header == null
             ? ""
@@ -338,7 +375,8 @@ public class UserBulkImportService {
         int excelRow,
         String name,
         String email,
-        Character gender
+        Character gender,
+        String majorId
     ) { }
 
 }

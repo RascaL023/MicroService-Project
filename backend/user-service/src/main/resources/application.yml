@@ -51,4 +51,4 @@ app:
     max-row: 100
     user-import:
       header-start-row: 0
-      columns: '{"name":"nama", "email":"email", "gender":"jeniskelamin"}'
+      columns: '{"name":"nama", "email":"email", "gender":"jeniskelamin", "major":"jurusan"}'

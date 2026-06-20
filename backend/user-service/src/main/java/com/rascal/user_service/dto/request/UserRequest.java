@@ -19,6 +19,9 @@ public record UserRequest(
     @NotNull(message = "Batch must be filled")
     @Min(value = 1, message = "Invalid batch")
     Integer batch,
+
+    @NotBlank(message = "Major must be filled")
+    String major,
     
     @NotNull(message = "Gender must be filled")
     Character gender

@@ -55,6 +55,8 @@ public class UserEventPublisher {
         body.put("name", user.getName());
         body.put("gender", String.valueOf(user.getGender()));
         body.put("batch", String.valueOf(user.getBatch().getId()));
+        if (user.getMajor() != null)
+            body.put("major", user.getMajor().getId());
         body.putAll(extra);
 
         try {

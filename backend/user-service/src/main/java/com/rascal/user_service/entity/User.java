@@ -33,6 +33,9 @@ public class User {
     @Column(name = "status", nullable = false)
     private String status;
 
+    @Column(name = "graduated_at")
+    private LocalDateTime graduatedAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
     
@@ -45,5 +48,9 @@ public class User {
     @ManyToOne(optional = false)
     @JoinColumn(name = "batch_id", nullable = false)
     private Batch batch;
+
+    @ManyToOne
+    @JoinColumn(name = "major_id", nullable = false)
+    private Major major;
 
 }

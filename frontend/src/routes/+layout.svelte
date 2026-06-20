@@ -48,6 +48,9 @@
 		if (hasAnyAuthority(session, ['subject.read', 'subject-material.read', 'subject-material.*', 'subject-module.read', 'subject-module.*'])) {
 			academicItems.push({ href: '/materials', label: 'Materi Kursus', icon: 'book' });
 		}
+		if (hasAnyAuthority(session, ['major.read', 'major.*'])) {
+			academicItems.push({ href: '/majors', label: 'Jurusan', icon: 'graduationCap' });
+		}
 		if (academicItems.length) {
 			groups.push({ label: 'Akademik', items: academicItems });
 		}
@@ -59,6 +62,7 @@
 				items: [
 					{ href: '/users', label: 'Data Peserta', icon: 'users' },
 					{ href: '/batches', label: 'Angkatan / Batch', icon: 'layers' },
+					{ href: '/majors', label: 'Jurusan', icon: 'graduationCap' },
 					{ href: '/subjects', label: 'Master Subjek', icon: 'book' },
 					{ href: '/auth', label: 'Keamanan Auth', icon: 'shield' }
 				]

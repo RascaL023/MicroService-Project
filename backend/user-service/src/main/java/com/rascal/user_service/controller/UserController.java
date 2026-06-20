@@ -23,7 +23,6 @@ import org.springframework.web.multipart.MultipartFile;
 import com.rascal.user_service.dto.mapper.UserMapper;
 import com.rascal.user_service.dto.request.UserPatchRequest;
 import com.rascal.user_service.dto.request.UserRequest;
-import com.rascal.user_service.dto.response.UserDetailResponse;
 import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.service.UserBulkImportService;
@@ -53,9 +52,10 @@ public class UserController {
     public ResponseEntity<?> getAllPaged(
         @RequestParam(required = false) String name,
         @RequestParam(required = false) Integer batch,
+        @RequestParam(required = false) String major,
         Pageable pageable
     ) {
-        Page<UserResponse> users = userService.getAllPaged(name, batch, pageable)
+        Page<UserResponse> users = userService.getAllPaged(name, batch, major, pageable)
             .map(UserMapper::toResponse);
         
         return ApiResponse.paged(
@@ -74,7 +74,7 @@ public class UserController {
     }
 
     @GetMapping("/dashboard-summary")
-    @PreAuthorize("hasAuthority('user.*')")
+    @PreAuthorize("hasAnyAuthority('user.*', 'user.read', 'batch.*', 'batch.read', 'major.*', 'major.read')")
     public ResponseEntity<?> getDashboardSummary() {
         return ApiResponse.success(
             HttpStatus.OK,
@@ -87,7 +87,7 @@ public class UserController {
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return ApiResponse.success(
             HttpStatus.OK, 
-            UserMapper.toDetailResponse(userService.getById(id))
+            UserMapper.toDetailedResponse(userService.getById(id))
         );
     }
 
@@ -118,11 +118,13 @@ public class UserController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("""
-        hasAuthority('user.*') or (
+        hasAnyAuthority('user.*', 'user.update') or (
             #id == authentication.name and 
             #request.batch == null and 
             #request.gender == null and 
-            #request.name == null
+            #request.name == null and
+            #request.major == null and
+            #request.graduatedAt == null
         )
     """
     ) public ResponseEntity<?> patchById(

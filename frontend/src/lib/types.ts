@@ -46,13 +46,23 @@ export type Batch = {
 	userCount?: number;
 };
 
+export type Major = {
+	id: string;
+	name: string;
+	userCount?: number;
+};
+
 export type User = {
 	id: number;
 	name: string;
-	email: string;
+	email?: string;
 	batch: string;
-	gender: string;
-	status: string;
+	majorId?: string | null;
+	majorName?: string | null;
+	gender?: string;
+	status?: string;
+	graduatedAt?: string | null;
+	createdAt?: string;
 };
 
 export type UserImportRowReport = {
@@ -87,6 +97,7 @@ export type AuthDashboardSummary = {
 export type UserDashboardSummary = {
 	totalUsers: number;
 	totalBatches: number;
+	totalMajors: number;
 };
 
 export type CourseDashboardSummary = {

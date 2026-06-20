@@ -1,9 +1,10 @@
 package com.rascal.user_service.dto.mapper;
 
-import com.rascal.user_service.dto.response.UserDetailResponse;
+import com.rascal.user_service.dto.response.UserDetailedResponse;
 import com.rascal.user_service.dto.response.UserLookupResponse;
 import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.entity.Batch;
+import com.rascal.user_service.entity.Major;
 import com.rascal.user_service.entity.User;
 
 public final class UserMapper {
@@ -12,34 +13,37 @@ public final class UserMapper {
 
     public static UserResponse toResponse(User user) {
         Batch batch = user.getBatch();
+        Major major = user.getMajor();
         String batchName = batch.getName() != null && !batch.getName().isBlank() ?
             batch.getId().toString() + " - " + batch.getName() : batch.getId().toString();
 
         return new UserResponse(
             user.getId(),
             user.getName(),
-            user.getEmail(), 
-            batchName,
-            user.getGender() == 'L' ? 
-                "Laki - laki" : "Perempuan",
-            user.getStatus()
+            major == null ? null : major.getId(),
+            major == null ? null : major.getName(),
+            batchName
         );
 
     }
 
-    public static UserDetailResponse toDetailResponse(User user) {
+    public static UserDetailedResponse toDetailedResponse(User user) {
         Batch batch = user.getBatch();
+        Major major = user.getMajor();
         String batchName = batch.getName() != null && !batch.getName().isBlank() ?
             batch.getId().toString() + " - " + batch.getName() : batch.getId().toString();
 
-        return new UserDetailResponse(
+        return new UserDetailedResponse(
             user.getId(),
             user.getName(),
             user.getEmail(),
             batchName,
+            major == null ? null : major.getId(),
+            major == null ? null : major.getName(),
             user.getGender() == 'L' ?
                 "Laki - laki" : "Perempuan",
             user.getStatus(),
+            user.getGraduatedAt(),
             user.getCreatedAt()
         );
     }
@@ -56,12 +60,13 @@ public final class UserMapper {
 
     public static void toEntity(
         User user, String name, String email, 
-        Character gender, Batch batch, String status
+        Character gender, Batch batch, Major major, String status
     ) {
         user.setName(name);
         user.setEmail(email);
         user.setGender(gender);
         user.setBatch(batch);
+        user.setMajor(major);
         user.setStatus(status);
     }
 

@@ -219,6 +219,12 @@
 		memberPatchForm.query = user.name;
 	}
 
+	function userPickerMeta(user: User) {
+		const major = user.majorName ?? user.majorId ?? 'Jurusan belum diisi';
+		const batch = user.batch ? `Batch ${user.batch}` : 'Batch belum diisi';
+		return `${major} • ${batch}`;
+	}
+
 	async function addMember() {
 		const current = detail;
 		if (!current) return;
@@ -1220,12 +1226,12 @@
 								type="button"
 								onclick={() => selectUser(user)}
 							>
-								<div class="avatar small">{user.name.slice(0, 1).toUpperCase()}</div>
-								<div>
-									<strong>{user.name}</strong>
-									<p>{user.email} • Batch {user.batch}</p>
-								</div>
-							</button>
+									<div class="avatar small">{user.name.slice(0, 1).toUpperCase()}</div>
+									<div>
+										<strong>{user.name}</strong>
+										<p>{userPickerMeta(user)}</p>
+									</div>
+								</button>
 						{/each}
 					{/if}
 				</div>
@@ -1292,12 +1298,12 @@
 								type="button"
 								onclick={() => selectPatchUser(user)}
 							>
-								<div class="avatar small">{user.name.slice(0, 1).toUpperCase()}</div>
-								<div>
-									<strong>{user.name}</strong>
-									<p>{user.email} • Batch {user.batch}</p>
-								</div>
-							</button>
+									<div class="avatar small">{user.name.slice(0, 1).toUpperCase()}</div>
+									<div>
+										<strong>{user.name}</strong>
+										<p>{userPickerMeta(user)}</p>
+									</div>
+								</button>
 						{/each}
 					{/if}
 				</div>

@@ -1,5 +1,7 @@
 package com.rascal.user_service.dto.request;
 
+import java.time.LocalDateTime;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -15,11 +17,16 @@ public record UserPatchRequest(
     @Min(value = 1, message = "Batch invalid")
     Integer batch,
 
-    Character gender
+    String major,
+
+    Character gender,
+
+    LocalDateTime graduatedAt
 ) { 
     public boolean isEmptyPatch() {
         return 
             this.name() == null && this.email() == null && 
-            this.batch() == null && this.gender() == null;
+            this.batch() == null && this.major() == null &&
+            this.gender() == null && this.graduatedAt() == null;
     }
 }

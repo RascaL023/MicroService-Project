@@ -129,5 +129,5 @@ export function hasAnyRole(session: LoginData | null, roles: string[]) {
 export function isAdminSession(session: LoginData | null) {
 	if (!session) return false;
 	return hasAnyRole(session, ['ADMIN', 'SUPER_ADMIN']) ||
-		hasAnyAuthority(session, ['user.*', 'batch.*', 'subject.*', 'group.*', 'enrollment.*']);
+		hasAnyAuthority(session, ['user.*', 'batch.*', 'major.*', 'subject.*', 'group.*', 'enrollment.*']);
 }

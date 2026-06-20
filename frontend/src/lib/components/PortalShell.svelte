@@ -58,7 +58,8 @@
 					label: 'Materi',
 					icon: 'book',
 					authorities: ['subject.read', 'subject-material.read', 'subject-module.read', 'subject.*']
-				}
+				},
+				{ href: '/app/majors', label: 'Jurusan', icon: 'graduationCap', authorities: ['major.read', 'major.*'] }
 			]
 		}
 	];
@@ -88,6 +89,7 @@
 			items: [
 				{ href: '/admin/users', label: 'User', icon: 'users', authorities: ['user.read', 'user.*'] },
 				{ href: '/admin/batches', label: 'Batch', icon: 'layers', authorities: ['batch.read', 'batch.*'] },
+				{ href: '/admin/majors', label: 'Jurusan', icon: 'graduationCap', authorities: ['major.read', 'major.*'] },
 				{ href: '/admin/subjects', label: 'Subject', icon: 'book', authorities: ['subject.read', 'subject.*'] },
 				{ href: '/admin/auth', label: 'Role & Auth', icon: 'shield', authorities: ['user.*'] }
 			]

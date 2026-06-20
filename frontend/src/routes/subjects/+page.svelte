@@ -39,6 +39,7 @@
 			size: String(pageMeta.size),
 			sort: 'name,asc'
 		});
+		if (name.trim()) query.set('name', name.trim());
 		const payload = await api<PageData<Subject> | Subject[]>(`/api/subjects?${query}`);
 		subjects = pageItems(payload);
 		pageMeta = paginationMeta(payload, pageMeta);
@@ -117,6 +118,11 @@
 		pageMeta = { ...pageMeta, page: 0, size };
 		void load();
 	}
+
+	function applyFilters() {
+		pageMeta = { ...pageMeta, page: 0 };
+		void load();
+	}
 </script>
 
 <svelte:head><title>Subjects - Divdik Course</title></svelte:head>
@@ -126,7 +132,18 @@
 <Notice {error} {success} />
 
 <AccessPanel authorities={['subject.read', 'subject.*']}>
-	<section class="page-actions" aria-label="Aksi subjek">
+	<section class="subject-toolbar" aria-label="Filter dan aksi subjek">
+		<form class="subject-filter" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
+			<label>
+				<span>Cari subject</span>
+				<input bind:value={name} placeholder="Contoh: Java, Logika Algoritma" />
+			</label>
+			<button class="btn btn-secondary" type="submit">
+				<Icons name="search" size={17} />
+				<span>Cari</span>
+			</button>
+		</form>
+
 		{#if canCreate}
 			<button class="btn btn-primary" type="button" onclick={() => showCreate = true}>
 				<Icons name="book" size={17} />
@@ -136,32 +153,33 @@
 	</section>
 	
 	<section>
-		<h3 class="mb-4">Daftar Subjek</h3>
 		<div class="subject-grid">
 			{#each subjects as subject}
-				<div class="card subject-card">
-					<div class="flex items-center gap-3">
+				<article class="subject-card">
+					<div class="subject-main">
 						<div class="subject-icon">
-							<Icons name="book" size={16} />
+							<Icons name="book" size={18} />
 						</div>
 						<div>
 							<div class="subject-name">{subject.name}</div>
 							<div class="subject-id">ID #{subject.id}</div>
 						</div>
 					</div>
-					<div class="subject-actions">
-						{#if canUpdate}
-							<button class="btn btn-ghost btn-sm" aria-label="Edit subjek" type="button" onclick={() => openUpdateModal(subject)}>
-								<Icons name="edit" size={14} />
-							</button>
-						{/if}
-						{#if canDelete}
-							<button class="btn btn-ghost btn-sm danger" aria-label="Hapus subjek" type="button" onclick={() => deleteSubject(subject)}>
-								<Icons name="x" size={14} />
-							</button>
-						{/if}
-					</div>
-				</div>
+					{#if canUpdate || canDelete}
+						<div class="subject-actions">
+							{#if canUpdate}
+								<button class="btn btn-ghost btn-sm" aria-label="Edit subjek" type="button" onclick={() => openUpdateModal(subject)}>
+									<Icons name="edit" size={14} />
+								</button>
+							{/if}
+							{#if canDelete}
+								<button class="btn btn-ghost btn-sm danger" aria-label="Hapus subjek" type="button" onclick={() => deleteSubject(subject)}>
+									<Icons name="x" size={14} />
+								</button>
+							{/if}
+						</div>
+					{/if}
+				</article>
 			{:else}
 				<div style="grid-column: 1 / -1;"><EmptyState text="Belum ada data subjek." /></div>
 			{/each}
@@ -232,21 +250,63 @@
 />
 
 <style>
-	h3 { font-size: 1.125rem; }
+	.subject-toolbar {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1.2rem;
+	}
+
+	.subject-filter {
+		display: flex;
+		align-items: flex-end;
+		gap: 0.75rem;
+		flex: 1;
+	}
+
+	.subject-filter label {
+		display: grid;
+		gap: 0.35rem;
+		flex: 1;
+	}
+
+	.subject-filter span {
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		font-weight: 700;
+	}
 
 	.subject-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+		gap: 0.9rem;
 	}
 
 	.subject-card {
 		position: relative;
-		margin-bottom: 0;
-		padding: 1rem;
 		display: flex;
 		justify-content: space-between;
+		align-items: flex-start;
+		gap: 0.8rem;
+		min-height: 104px;
+		padding: 1rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.subject-card:hover {
+		border-color: var(--primary-border);
+		transform: translateY(-1px);
+	}
+
+	.subject-main {
+		display: flex;
 		align-items: center;
+		gap: 0.85rem;
+		min-width: 0;
 	}
     
 	.subject-actions {
@@ -255,17 +315,19 @@
 	}
 
 	.subject-icon {
-		width: 32px;
-		height: 32px;
-		background: var(--primary-light);
+		width: 46px;
+		height: 46px;
+		background: var(--primary-soft);
 		color: var(--primary);
-		border-radius: 6px;
+		border-radius: 14px;
 		display: grid;
 		place-items: center;
+		flex: 0 0 auto;
 	}
     
 	.subject-name {
 		font-weight: 700;
+		line-height: 1.3;
 	}
     
 	.subject-id {
@@ -281,9 +343,9 @@
 	}
     
 	.btn-sm {
-        display: flex;
-        justify-content: center;
-        align-items: center;
+		display: flex;
+		justify-content: center;
+		align-items: center;
 	}
     
 	.danger {
@@ -291,7 +353,14 @@
 	}
 
 	@media (max-width: 560px) {
-		.page-actions .btn {
+		.subject-toolbar,
+		.subject-filter {
+			display: grid;
+			grid-template-columns: 1fr;
+		}
+
+		.subject-toolbar .btn,
+		.subject-filter .btn {
 			width: 100%;
 		}
 	}

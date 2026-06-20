@@ -50,6 +50,8 @@ INSERT INTO authorities(name) VALUES
 	('user.*'),
 	('batch.create'), ('batch.read'), ('batch.update'), ('batch.delete'),
 	('batch.*'),
+	('major.create'), ('major.read'), ('major.update'), ('major.delete'),
+	('major.*'),
 
 	('course.create'), ('course.read'), ('course.update'), ('course.delete'),
 	('course.*'),
@@ -82,6 +84,7 @@ SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
     'user.*', 'batch.*', 
+    'major.*',
     'course.*', 'group.*', 
     'group-schedule.*', 'enrollment.*', 
     'subject.*', 'subject-material.*',
@@ -93,7 +96,7 @@ INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
-    'user.*', 'batch.*'
+    'user.*', 'batch.*', 'major.*'
 ) WHERE r.name = 'CHIEF'
 ON CONFLICT DO NOTHING;
 
@@ -101,7 +104,7 @@ INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
-    'user.update', 'batch.update'
+    'user.update', 'batch.update', 'major.update'
 ) WHERE r.name = 'CHIEF_DEPUTY'
 ON CONFLICT DO NOTHING;
 
@@ -133,7 +136,7 @@ INSERT INTO authorities_roles(role_id, authority_id)
 SELECT r.id, a.id
 FROM roles r
 JOIN authorities a ON a.name IN (
-    'user.read', 'batch.read', 
+    'user.read', 'batch.read', 'major.read',
     'course.read', 'group.read', 
     'group-schedule.read', 'enrollment.read', 
     'subject.read', 'subject-material.read',
