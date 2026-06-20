@@ -33,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.rascal.user_service.dto.response.UserBulkImportResponse;
 import com.rascal.user_service.dto.response.UserImportRowReport;
 import com.rascal.user_service.entity.Batch;
+import com.rascal.user_service.entity.UserStatus;
 import com.rascal.user_service.event.UserEventPublisher;
 import com.rascal.user_service.repository.BatchRepository;
 import com.rascal.user_service.repository.MajorRepository;
@@ -52,10 +53,9 @@ public class UserBulkImportService {
     private Map<String, String> columnHeaders;
     @Value("${app.excel.user-import.header-start-row:0}")
     private int headerStartRow;
-    @Value("${spring.servlet.multipart.max-file-size:8MB}")
+    @Value("${spring.servlet.multipart.max-file-size:12MB}")
     private DataSize maxImportFileSize;
 
-    private static final String STATUS_ACTIVE = "ACTIVE";
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
     private final JdbcTemplate jdbcTemplate;
@@ -216,7 +216,7 @@ public class UserBulkImportService {
                 statement.setString(++param, row.name());
                 statement.setString(++param, row.email());
                 statement.setString(++param, String.valueOf(row.gender()));
-                statement.setString(++param, STATUS_ACTIVE);
+                statement.setString(++param, UserStatus.ACTIVE.name());
                 statement.setInt(++param, batch.getId());
                 statement.setString(++param, row.majorId());
                 statement.setObject(++param, now);

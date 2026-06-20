@@ -1,5 +1,6 @@
 package com.rascal.user_service.dto.response;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record UserDetailedResponse(
@@ -11,6 +12,6 @@ public record UserDetailedResponse(
     String majorName,
     String gender,
     String status,
-    LocalDateTime graduatedAt,
+    LocalDate graduatedAt,
     LocalDateTime createdAt
 ) { }

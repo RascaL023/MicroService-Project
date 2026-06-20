@@ -18,6 +18,7 @@ import com.rascal.user_service.dto.response.UserDashboardSummaryResponse;
 import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.entity.Major;
 import com.rascal.user_service.entity.User;
+import com.rascal.user_service.entity.UserStatus;
 import com.rascal.user_service.event.UserEventPublisher;
 import com.rascal.user_service.repository.BatchRepository;
 import com.rascal.user_service.repository.MajorRepository;
@@ -31,8 +32,6 @@ import id.rascal.response_kit.exception.NotFoundException;
 @Service
 @Transactional
 public class UserService {
-
-    private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final UserRepository userRepository;
     private final BatchRepository batchRepository;
@@ -110,7 +109,7 @@ public class UserService {
         User user = new User();
         UserMapper.toEntity(
             user, name, email, 
-            gender, batch, major, STATUS_ACTIVE
+            gender, batch, major, UserStatus.ACTIVE
         );
         user.setCreatedAt(LocalDateTime.now());
 
@@ -130,6 +129,7 @@ public class UserService {
         Character oldGender = user.getGender();
         Integer oldBatch = user.getBatch().getId();
         String oldMajor = user.getMajor() == null ? null : user.getMajor().getId();
+        UserStatus oldStatus = user.getStatus();
 
         if (request.email() != null) {
             String email = normalizeEmail(request.email());
@@ -143,6 +143,7 @@ public class UserService {
         if (request.name() != null) user.setName(normalizeName(request.name()));
         if (request.gender() != null) user.setGender(normalizeGender(request.gender()));
         if (request.graduatedAt() != null) user.setGraduatedAt(request.graduatedAt());
+        if (request.status() != null) user.setStatus(request.status());
         user.setUpdatedAt(LocalDateTime.now());
 
         User saved = userRepository.save(user);
@@ -150,7 +151,8 @@ public class UserService {
             !Objects.equals(oldName, saved.getName()) ||
             !Objects.equals(oldGender, saved.getGender()) ||
             !Objects.equals(oldBatch, saved.getBatch().getId()) ||
-            !Objects.equals(oldMajor, saved.getMajor() == null ? null : saved.getMajor().getId());
+            !Objects.equals(oldMajor, saved.getMajor() == null ? null : saved.getMajor().getId()) ||
+            !Objects.equals(oldStatus, saved.getStatus());
 
         if (profileChanged) 
             eventPublisher.userProfileUpdated(saved);

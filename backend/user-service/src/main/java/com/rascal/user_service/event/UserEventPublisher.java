@@ -54,6 +54,7 @@ public class UserEventPublisher {
         body.put("email", user.getEmail());
         body.put("name", user.getName());
         body.put("gender", String.valueOf(user.getGender()));
+        body.put("status", user.getStatus().name());
         body.put("batch", String.valueOf(user.getBatch().getId()));
         if (user.getMajor() != null)
             body.put("major", user.getMajor().getId());

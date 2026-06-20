@@ -124,7 +124,8 @@ public class UserController {
             #request.gender == null and 
             #request.name == null and
             #request.major == null and
-            #request.graduatedAt == null
+            #request.graduatedAt == null and
+            #request.status == null
         )
     """
     ) public ResponseEntity<?> patchById(

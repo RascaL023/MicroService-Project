@@ -1,6 +1,7 @@
 # LAST:
     - user-service:
         - add majors
+        - status = ACTIVE/GRADUATED/DROP_OUT
     - auth-service:
         - after activation, need manual login
     - course-service:
@@ -30,8 +31,6 @@
         - profile page:
             - update email
             - user profile picture
-        - more user data:
-            - status = ACTIVE/GRADUATED/DROP_OUT
         - better excel import template
     - course-service:
         - learner ack assessments

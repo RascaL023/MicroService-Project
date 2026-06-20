@@ -31,14 +31,22 @@
 		}
 	}
 
-	function dateLabel(value?: string | null) {
+	function dateLabel(value?: string | null, withTime = false) {
 		if (!value) return '-';
 		const parsed = new Date(value);
 		if (Number.isNaN(parsed.getTime())) return '-';
-		return new Intl.DateTimeFormat('id-ID', {
+		return new Intl.DateTimeFormat('id-ID', withTime ? {
 			dateStyle: 'medium',
 			timeStyle: 'short'
+		} : {
+			dateStyle: 'medium'
 		}).format(parsed);
+	}
+
+	function userStatusLabel(value?: string) {
+		if (value === 'GRADUATED') return 'Lulus';
+		if (value === 'DROP_OUT') return 'Drop Out';
+		return 'Aktif';
 	}
 </script>
 
@@ -66,7 +74,9 @@
 					<h2>{user.name}</h2>
 					<p>{user.email}</p>
 				</div>
-				<span class="badge badge-green">{user.status ?? 'ACTIVE'}</span>
+				<span class="badge" class:badge-green={user.status !== 'DROP_OUT'} class:badge-red={user.status === 'DROP_OUT'}>
+					{userStatusLabel(user.status)}
+				</span>
 			</div>
 
 			<div class="detail-grid">
@@ -85,7 +95,7 @@
 				</div>
 				<div>
 					<span>Di daftarkan pada</span>
-					<strong>{dateLabel(user.createdAt)}</strong>
+					<strong>{dateLabel(user.createdAt, true)}</strong>
 				</div>
 				<div>
 					<span>Lulus pada</span>

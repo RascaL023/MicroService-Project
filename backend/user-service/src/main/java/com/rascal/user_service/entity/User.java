@@ -1,9 +1,12 @@
 package com.rascal.user_service.entity;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -30,11 +33,12 @@ public class User {
     @Column(name = "gender", nullable = false)
     private Character gender;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private String status;
+    private UserStatus status;
 
     @Column(name = "graduated_at")
-    private LocalDateTime graduatedAt;
+    private LocalDate graduatedAt;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

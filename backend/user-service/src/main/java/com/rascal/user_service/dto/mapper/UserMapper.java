@@ -6,6 +6,7 @@ import com.rascal.user_service.dto.response.UserResponse;
 import com.rascal.user_service.entity.Batch;
 import com.rascal.user_service.entity.Major;
 import com.rascal.user_service.entity.User;
+import com.rascal.user_service.entity.UserStatus;
 
 public final class UserMapper {
 
@@ -42,7 +43,7 @@ public final class UserMapper {
             major == null ? null : major.getName(),
             user.getGender() == 'L' ?
                 "Laki - laki" : "Perempuan",
-            user.getStatus(),
+            user.getStatus().name(),
             user.getGraduatedAt(),
             user.getCreatedAt()
         );
@@ -60,7 +61,7 @@ public final class UserMapper {
 
     public static void toEntity(
         User user, String name, String email, 
-        Character gender, Batch batch, Major major, String status
+        Character gender, Batch batch, Major major, UserStatus status
     ) {
         user.setName(name);
         user.setEmail(email);

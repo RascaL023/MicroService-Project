@@ -1,7 +1,8 @@
 package com.rascal.user_service.dto.request;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
+import com.rascal.user_service.entity.UserStatus;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -21,12 +22,15 @@ public record UserPatchRequest(
 
     Character gender,
 
-    LocalDateTime graduatedAt
+    LocalDate graduatedAt,
+
+    UserStatus status
 ) { 
     public boolean isEmptyPatch() {
         return 
             this.name() == null && this.email() == null && 
             this.batch() == null && this.major() == null &&
-            this.gender() == null && this.graduatedAt() == null;
+            this.gender() == null && this.graduatedAt() == null &&
+            this.status() == null;
     }
 }

@@ -20,7 +20,7 @@
 	let session = $state<LoginData | null>(null);
 	let filters = $state({ name: '', batch: '', major: '', sortBy: 'id', sortDirection: 'desc' });
 	let form = $state({ name: '', email: '', batch: '', major: '', gender: 'L' });
-	let patch = $state({ id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '' });
+	let patch = $state({ id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '', status: 'ACTIVE' });
 	let showCreate = $state(false);
 	let showEdit = $state(false);
 	let showImport = $state(false);
@@ -34,6 +34,9 @@
 	let loading = $state(true);
 	let busy = $state('');
 
+	const maxImportFileSizeMb = 12;
+	const maxImportFileSize = maxImportFileSizeMb * 1024 * 1024;
+	const maxImportRows = 100;
 	const canCreate = $derived(hasAnyAuthority(session, ['user.create', 'user.*']));
 	const canUpdateAll = $derived(hasAnyAuthority(session, ['user.update', 'user.*']));
 	const canDelete = $derived(hasAnyAuthority(session, ['user.delete', 'user.*']));
@@ -126,10 +129,11 @@
 				if (canUpdateAll && patch.major) body.major = patch.major;
 				if (canUpdateAll && patch.gender) body.gender = patch.gender;
 				if (canUpdateAll && patch.graduatedAt) body.graduatedAt = patch.graduatedAt;
+				if (canUpdateAll && patch.status) body.status = patch.status;
 
 				await api<User>(`/api/users/${patch.id}`, { method: 'PATCH', body: JSON.stringify(body) });
 				showEdit = false;
-				patch = { id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '' };
+				patch = { id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '', status: 'ACTIVE' };
 				await loadUsers();
 				success = 'User berhasil diupdate.';
 			} finally {
@@ -148,8 +152,8 @@
 				error = 'File harus berformat .xlsx atau .xls.';
 				return;
 			}
-			if (selectedFile.size > 5 * 1024 * 1024) {
-				error = 'Ukuran file maksimal 5MB.';
+			if (selectedFile.size > maxImportFileSize) {
+				error = `Ukuran file maksimal ${maxImportFileSizeMb}MB.`;
 				return;
 			}
 			if (!importBatch) {
@@ -186,6 +190,11 @@
 			await submit(async () => {
 				await api<null>(`/api/users/${user.id}`, { method: 'DELETE' });
 				await loadUsers();
+				if (selectedUser?.id === user.id) {
+					showEdit = false;
+					selectedUser = null;
+					patch = { id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '', status: 'ACTIVE' };
+				}
 				success = 'User berhasil dihapus.';
 			});
 		});
@@ -234,7 +243,8 @@
 			batch: batchIdFromLabel(detail.batch),
 			major: detail.majorId ?? '',
 			gender: genderCode(detail.gender ?? 'L'),
-			graduatedAt: detail.graduatedAt ? detail.graduatedAt.slice(0, 16) : ''
+			graduatedAt: detail.graduatedAt ? detail.graduatedAt.slice(0, 10) : '',
+			status: detail.status ?? 'ACTIVE'
 		};
 		showEdit = true;
 	}
@@ -273,6 +283,12 @@
 
 	function genderLabel(value: string) {
 		return genderCode(value) === 'L' ? 'Laki-laki' : 'Perempuan';
+	}
+
+	function userStatusLabel(value?: string) {
+		if (value === 'GRADUATED') return 'Lulus';
+		if (value === 'DROP_OUT') return 'Drop Out';
+		return 'Aktif';
 	}
 
 	function batchIdFromLabel(value: string) {
@@ -554,8 +570,16 @@
 					</select>
 				</label>
 				<label>
+					<span>Status Course</span>
+					<select bind:value={patch.status} disabled={!canEditMainFields()}>
+						<option value="ACTIVE">{userStatusLabel('ACTIVE')}</option>
+						<option value="GRADUATED">{userStatusLabel('GRADUATED')}</option>
+						<option value="DROP_OUT">{userStatusLabel('DROP_OUT')}</option>
+					</select>
+				</label>
+				<label>
 					<span>Tanggal Lulus</span>
-					<input bind:value={patch.graduatedAt} disabled={!canEditMainFields()} type="datetime-local" />
+					<input bind:value={patch.graduatedAt} disabled={!canEditMainFields()} type="date" />
 				</label>
 				<div class="modal-actions">
 					<div class="action-cluster">
@@ -620,7 +644,7 @@
 					<input type="file" accept=".xlsx,.xls" onchange={onFileChange} />
 					<Icons name="upload" size={22} />
 					<span>{selectedFile ? selectedFile.name : 'Pilih file Excel'}</span>
-					<small>{selectedFile ? fileSizeLabel(selectedFile) : 'Maksimal 5MB, sampai 1000 row data.'}</small>
+					<small>{selectedFile ? fileSizeLabel(selectedFile) : `Maksimal ${maxImportFileSizeMb}MB, sampai ${maxImportRows} row data.`}</small>
 				</label>
 
 				{#if importResult}
