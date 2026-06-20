@@ -138,7 +138,7 @@
 				<span>Cari subject</span>
 				<input bind:value={name} placeholder="Contoh: Java, Logika Algoritma" />
 			</label>
-			<button class="btn btn-secondary" type="submit">
+			<button class="btn btn-secondary filter-submit" type="submit">
 				<Icons name="search" size={17} />
 				<span>Cari</span>
 			</button>

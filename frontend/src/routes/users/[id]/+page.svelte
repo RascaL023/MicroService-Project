@@ -6,24 +6,39 @@
 	import Icons from '$lib/components/Icons.svelte';
 	import Notice from '$lib/components/Notice.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
-	import { api } from '$lib/api';
-	import type { User } from '$lib/types';
+	import { api, readSession, saveSession } from '$lib/api';
+	import type { LoginData, User } from '$lib/types';
 
 	let user = $state<User | null>(null);
+	let session = $state<LoginData | null>(null);
 	let loading = $state(true);
+	let showEmailModal = $state(false);
+	let emailForm = $state('');
+	let busy = $state(false);
 	let error = $state('');
+	let success = $state('');
 
-	const userId = $derived(Number(page.params.id));
-	const portalPrefix = $derived(page.url.pathname.startsWith('/admin/') ? '/admin' : '');
+	const routeUserId = $derived(page.params.id);
+	const userId = $derived(routeUserId === 'me' ? (session?.userId ?? 0) : Number(routeUserId));
+	const portalPrefix = $derived(
+		page.url.pathname.startsWith('/admin/') ? '/admin' :
+		page.url.pathname.startsWith('/app/') ? '/app' : ''
+	);
+	const isSelf = $derived(Boolean(session?.userId && (routeUserId === 'me' || userId === session.userId)));
 
-	onMount(() => void loadUser());
+	onMount(() => {
+		session = readSession();
+		void loadUser();
+	});
 
 	async function loadUser() {
 		loading = true;
 		error = '';
 		try {
+			if (!userId) throw new Error('User tidak valid.');
 			const payload = await api<User>(`/api/users/${userId}`);
 			user = payload.data ?? null;
+			emailForm = user?.email ?? '';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Gagal memuat detail user.';
 		} finally {
@@ -48,6 +63,31 @@
 		if (value === 'DROP_OUT') return 'Drop Out';
 		return 'Aktif';
 	}
+
+	async function updateEmail() {
+		if (!isSelf) return;
+		error = '';
+		success = '';
+		busy = true;
+		try {
+			const payload = await api<User>(`/api/users/${userId}`, {
+				method: 'PATCH',
+				body: JSON.stringify({ email: emailForm })
+			});
+			user = payload.data ?? user;
+			emailForm = user?.email ?? emailForm;
+			if (session && user?.email) {
+				session = { ...session, email: user.email };
+				saveSession(session);
+			}
+			showEmailModal = false;
+			success = 'Email berhasil diupdate.';
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Gagal mengupdate email.';
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Detail User - Divdik Course</title></svelte:head>
@@ -59,7 +99,7 @@
 
 <PageTitle eyebrow="User Profile" title="Detail User" description="Ringkasan profil administratif peserta." />
 
-<Notice {error} />
+<Notice {error} {success} />
 
 <AccessPanel authorities={['user.read', 'user.*']}>
 	{#if loading}
@@ -74,9 +114,17 @@
 					<h2>{user.name}</h2>
 					<p>{user.email}</p>
 				</div>
-				<span class="badge" class:badge-green={user.status !== 'DROP_OUT'} class:badge-red={user.status === 'DROP_OUT'}>
-					{userStatusLabel(user.status)}
-				</span>
+				<div class="hero-actions">
+					<span class="badge" class:badge-green={user.status !== 'DROP_OUT'} class:badge-red={user.status === 'DROP_OUT'}>
+						{userStatusLabel(user.status)}
+					</span>
+					{#if isSelf}
+						<button class="btn btn-secondary" type="button" onclick={() => showEmailModal = true}>
+							<Icons name="edit" size={16} />
+							<span>Ganti Email</span>
+						</button>
+					{/if}
+				</div>
 			</div>
 
 			<div class="detail-grid">
@@ -105,6 +153,34 @@
 		</section>
 	{/if}
 </AccessPanel>
+
+{#if showEmailModal && isSelf}
+	<div class="modal-backdrop" role="presentation" onclick={() => showEmailModal = false}>
+		<section class="modal-panel email-modal" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
+			<div class="modal-head">
+				<div>
+					<h3>Ganti Email</h3>
+					<p>Email ini akan menjadi email administratif profil user.</p>
+				</div>
+				<button class="btn btn-ghost icon-btn" type="button" aria-label="Tutup modal" onclick={() => showEmailModal = false}>
+					<Icons name="x" size={18} />
+				</button>
+			</div>
+			<form class="modal-form" onsubmit={(event) => { event.preventDefault(); void updateEmail(); }}>
+				<label>
+					<span>Email baru</span>
+					<input bind:value={emailForm} type="email" required />
+				</label>
+				<div class="modal-actions">
+					<button class="btn btn-ghost" type="button" onclick={() => showEmailModal = false}>Batal</button>
+					<button class="btn btn-primary" type="submit" disabled={busy}>
+						{busy ? 'Menyimpan...' : 'Simpan Email'}
+					</button>
+				</div>
+			</form>
+		</section>
+	</div>
+{/if}
 
 <style>
 	.back-button {
@@ -150,6 +226,14 @@
 		overflow-wrap: anywhere;
 	}
 
+	.hero-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+
 	.detail-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -181,6 +265,10 @@
 	@media (max-width: 640px) {
 		.profile-hero {
 			grid-template-columns: 1fr;
+		}
+
+		.hero-actions {
+			justify-content: flex-start;
 		}
 	}
 </style>

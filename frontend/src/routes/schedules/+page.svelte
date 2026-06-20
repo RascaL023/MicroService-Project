@@ -245,7 +245,7 @@
 					{/each}
 				</select>
 			</label>
-			<button class="btn btn-primary filter-button" type="submit">
+			<button class="btn btn-primary filter-button filter-submit" type="submit">
 				<Icons name="search" size={17} />
 				<span>Filter</span>
 			</button>

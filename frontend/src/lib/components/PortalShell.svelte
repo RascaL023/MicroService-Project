@@ -42,6 +42,7 @@
 	const portalHome = $derived(isAdminPortal ? '/admin' : '/app');
 	const alternatePortal = $derived(isAdminPortal ? '/app' : '/admin');
 	const alternateLabel = $derived(isAdminPortal ? 'Portal Pengguna' : 'Portal Pengelola');
+	const accountHref = $derived(`${isAdminPortal ? '/admin' : '/app'}/users/me`);
 
 	const appNavigation: { label: string; items: NavItem[] }[] = [
 		{
@@ -59,6 +60,8 @@
 					icon: 'book',
 					authorities: ['subject.read', 'subject-material.read', 'subject-module.read', 'subject.*']
 				},
+				{ href: '/app/users', label: 'User', icon: 'users', authorities: ['user.read', 'user.*'] },
+				{ href: '/app/batches', label: 'Batch', icon: 'layers', authorities: ['batch.read', 'batch.*'] },
 				{ href: '/app/majors', label: 'Jurusan', icon: 'graduationCap', authorities: ['major.read', 'major.*'] }
 			]
 		}
@@ -253,13 +256,13 @@
 					>
 						<Icons name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
 					</button>
-					<div class="portal-user">
+					<a class="portal-user" href={accountHref} title="Lihat detail akun">
 						<div>
 							<strong>{session.email?.split('@')[0] || 'Pengguna'}</strong>
 							<span>{session.roles?.join(', ') || 'USER'}</span>
 						</div>
 						<div class="user-avatar">{(session.email?.[0] || 'U').toUpperCase()}</div>
-					</div>
+					</a>
 				</div>
 			</header>
 
@@ -345,6 +348,14 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		color: inherit;
+		text-decoration: none;
+		border-radius: var(--radius-sm);
+		padding: 0.25rem;
+	}
+
+	.portal-user:hover {
+		background: var(--primary-soft);
 	}
 
 	.portal-user > div:first-child {

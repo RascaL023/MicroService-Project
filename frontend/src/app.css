@@ -390,7 +390,10 @@ input:focus, select:focus, textarea:focus {
 .schedule-filters > .btn,
 .report-form > .btn,
 .compact-filter form > .btn,
-.batch-filter > .btn {
+.batch-filter > .btn,
+.major-filter > .btn,
+.subject-filter > .btn,
+.filter-submit {
 	align-self: end;
 	height: 45px;
 	min-height: 45px;

@@ -142,7 +142,7 @@
 					{/each}
 				</select>
 			</label>
-			<button class="btn btn-primary" type="submit" disabled={loading}>
+			<button class="btn btn-primary filter-submit" type="submit" disabled={loading}>
 				<Icons name="download" size={16} />
 				<span>{loading ? 'Membuat...' : 'Download Excel'}</span>
 			</button>

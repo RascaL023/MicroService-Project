@@ -91,20 +91,6 @@
 		<h1>Dashboard Admin</h1>
 		<p>Pantau kesehatan akun, kapasitas peserta, dan operasional akademik dari satu tempat.</p>
 	</div>
-	<div class="heading-actions">
-		{#if canCreateUsers}
-			<a class="btn btn-secondary" href="/admin/users">
-				<Icons name="upload" size={16} />
-				<span>Import User</span>
-			</a>
-		{/if}
-		{#if canCreateGroups}
-			<a class="btn btn-primary" href="/admin/groups">
-				<Icons name="layers" size={16} />
-				<span>Buat Group</span>
-			</a>
-		{/if}
-	</div>
 </section>
 
 <Notice {error} />
@@ -260,12 +246,6 @@
 		font-weight: 800;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-	}
-
-	.heading-actions {
-		display: flex;
-		gap: 0.65rem;
-		flex-wrap: wrap;
 	}
 
 	.section-block {
@@ -492,10 +472,6 @@
 		.quick-actions {
 			display: grid;
 			grid-template-columns: 1fr;
-		}
-
-		.heading-actions {
-			display: grid;
 		}
 
 	}

@@ -277,7 +277,7 @@
 							<option value="asc">Naik</option>
 						</select>
 					</label>
-					<button class="btn btn-primary" type="submit">
+					<button class="btn btn-primary filter-submit" type="submit">
 						<Icons name="search" size={18} />
 						<span>Filter</span>
 					</button>

@@ -406,7 +406,7 @@
 					<option value="desc">Turun</option>
 				</select>
 			</label>
-			<button class="btn btn-primary" type="submit">
+			<button class="btn btn-primary filter-submit" type="submit">
 				<Icons name="search" size={17} />
 				<span>Filter</span>
 			</button>

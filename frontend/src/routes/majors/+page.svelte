@@ -166,7 +166,7 @@
 				<span>Cari jurusan</span>
 				<input bind:value={keyword} placeholder="Contoh: TI atau Informatika" />
 			</label>
-			<button class="btn btn-secondary" type="submit">
+			<button class="btn btn-secondary filter-submit" type="submit">
 				<Icons name="search" size={17} />
 				<span>Cari</span>
 			</button>

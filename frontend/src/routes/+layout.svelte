@@ -51,6 +51,12 @@
 		if (hasAnyAuthority(session, ['major.read', 'major.*'])) {
 			academicItems.push({ href: '/majors', label: 'Jurusan', icon: 'graduationCap' });
 		}
+		if (!isAdminSession(session) && hasAnyAuthority(session, ['user.read', 'user.*'])) {
+			academicItems.push({ href: '/users', label: 'Data Peserta', icon: 'users' });
+		}
+		if (!isAdminSession(session) && hasAnyAuthority(session, ['batch.read', 'batch.*'])) {
+			academicItems.push({ href: '/batches', label: 'Angkatan / Batch', icon: 'layers' });
+		}
 		if (academicItems.length) {
 			groups.push({ label: 'Akademik', items: academicItems });
 		}

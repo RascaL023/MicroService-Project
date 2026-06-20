@@ -148,7 +148,7 @@
 				<div style="flex: 1;">
 					<input bind:value={name} placeholder="Cari nama batch..." />
 				</div>
-				<button class="btn btn-primary" type="submit">
+				<button class="btn btn-primary filter-submit" type="submit">
 					<Icons name="search" size={18} />
 					<span>Cari</span>
 				</button>

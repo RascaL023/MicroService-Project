@@ -1,5 +1,7 @@
 # LAST:
     - user-service:
+        - profile page:
+            - update email
         - add majors
         - status = ACTIVE/GRADUATED/DROP_OUT
     - auth-service:
@@ -28,9 +30,8 @@
 
 # TODO:
     - user-service: 
-        - profile page:
-            - update email
-            - user profile picture
+        - add logic on user status
+        - user profile picture
         - better excel import template
     - course-service:
         - learner ack assessments
