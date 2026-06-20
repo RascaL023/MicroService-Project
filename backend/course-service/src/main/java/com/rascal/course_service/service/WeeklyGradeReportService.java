@@ -20,11 +20,14 @@ import java.util.stream.Collectors;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
@@ -144,7 +147,11 @@ public class WeeklyGradeReportService {
             );
         }
 
-        for (Assessment assessment : assessments) {
+        List<Assessment> sortedAssessments = assessments.stream()
+            .sorted(assessmentOrder())
+            .toList();
+
+        for (Assessment assessment : sortedAssessments) {
             LinkedHashMap<String, AssessmentColumn> columns = columnMaps.get(assessment.getType());
             AssessmentColumn column = columns.computeIfAbsent(
                 assessmentColumnKey(assessment),
@@ -154,7 +161,7 @@ public class WeeklyGradeReportService {
         }
 
         for (LearnerRow row : learners.values()) {
-            for (Assessment assessment : assessments) {
+            for (Assessment assessment : sortedAssessments) {
                 AssessmentGrade grade = gradesByKey.get(new GradeKey(assessment.getId(), row.userId));
                 if (grade != null) row.grades.put(assessment.getId(), grade.getScore());
             }
@@ -172,6 +179,20 @@ public class WeeklyGradeReportService {
         }
 
         return new ReportData(academicYear, subject, sortedLearners, columnsByType);
+    }
+
+    private Comparator<Assessment> assessmentOrder() {
+        return Comparator
+            .comparing(Assessment::getType)
+            .thenComparing(
+                Assessment::getDueAt,
+                Comparator.nullsLast(Comparator.naturalOrder())
+            )
+            .thenComparing(
+                Assessment::getCreatedAt,
+                Comparator.nullsLast(Comparator.naturalOrder())
+            )
+            .thenComparing(Assessment::getId);
     }
 
     private Map<AssessmentTypeEnum, LinkedHashMap<String, AssessmentColumn>> emptyColumnMaps() {
@@ -201,6 +222,8 @@ public class WeeklyGradeReportService {
         List<AssessmentColumn> columns
     ) {
         Sheet sheet = workbook.createSheet(uniqueSheetName(workbook, type.getDisplayName()));
+        sheet.setDisplayGridlines(false);
+        configureSheet(sheet, columns.size());
         int rowIndex = 0;
 
         rowIndex = writeMeta(sheet, styles, rowIndex, data);
@@ -211,11 +234,13 @@ public class WeeklyGradeReportService {
         writeCell(header, col++, "No", styles.header);
         writeCell(header, col++, "Nama Peserta", styles.header);
         for (AssessmentColumn column : columns) writeCell(header, col++, column.title, styles.header);
-        writeCell(header, col, "Rata - rata", styles.header);
+        writeCell(header, col++, "Rata - rata", styles.header);
+        writeCell(header, col, "Grade", styles.header);
 
         int no = 1;
         for (LearnerRow learner : data.learners) {
             Row row = sheet.createRow(rowIndex++);
+            row.setHeightInPoints(22);
             col = 0;
             writeNumber(row, col++, no++, styles.integer);
             writeCell(row, col++, learnerName(learner), styles.text);
@@ -224,29 +249,46 @@ public class WeeklyGradeReportService {
                 writeScore(row, col++, columnScore(learner, column), styles);
             }
 
-            writeScore(row, col, learnerAverage(learner, columns), styles);
+            BigDecimal average = learnerAverage(learner, columns);
+            writeScore(row, col++, average, styles);
+            writeCell(row, col, grade(average), styles.grade);
         }
 
-        autosize(sheet, Math.min(columns.size() + 3, 80));
+        sheet.createFreezePane(0, 6);
     }
 
     private int writeMeta(Sheet sheet, Styles styles, int rowIndex, ReportData data) {
         Row titleRow = sheet.createRow(rowIndex++);
+        titleRow.setHeightInPoints(24);
         writeCell(titleRow, 0, "Laporan Nilai Mingguan", styles.title);
 
         Row academicYearRow = sheet.createRow(rowIndex++);
+        academicYearRow.setHeightInPoints(20);
         writeCell(academicYearRow, 0, "Tahun Akademik", styles.label);
-        writeCell(academicYearRow, 1, data.academicYear, styles.text);
+        writeCell(academicYearRow, 1, data.academicYear, styles.metaText);
 
         Row subjectRow = sheet.createRow(rowIndex++);
+        subjectRow.setHeightInPoints(20);
         writeCell(subjectRow, 0, "Subject", styles.label);
-        writeCell(subjectRow, 1, data.subject.getName(), styles.text);
+        writeCell(subjectRow, 1, data.subject.getName(), styles.metaText);
 
         Row generatedRow = sheet.createRow(rowIndex++);
+        generatedRow.setHeightInPoints(20);
         writeCell(generatedRow, 0, "Generated At", styles.label);
-        writeCell(generatedRow, 1, LocalDateTime.now().format(DATE_TIME_FORMAT), styles.text);
+        writeCell(generatedRow, 1, LocalDateTime.now().format(DATE_TIME_FORMAT), styles.metaText);
 
         return rowIndex;
+    }
+
+    private void configureSheet(Sheet sheet, int assessmentColumnCount) {
+        sheet.setDefaultRowHeightInPoints(20);
+        sheet.setColumnWidth(0, 7 * 256);
+        sheet.setColumnWidth(1, 30 * 256);
+        for (int i = 0; i < assessmentColumnCount; i++) {
+            sheet.setColumnWidth(i + 2, 14 * 256);
+        }
+        sheet.setColumnWidth(assessmentColumnCount + 2, 14 * 256);
+        sheet.setColumnWidth(assessmentColumnCount + 3, 10 * 256);
     }
 
     private void writeCell(Row row, int col, String value, CellStyle style) {
@@ -293,6 +335,16 @@ public class WeeklyGradeReportService {
         return total.divide(BigDecimal.valueOf(scores.size()), 2, RoundingMode.HALF_UP);
     }
 
+    private String grade(BigDecimal average) {
+        if (average == null) return "";
+        if (average.compareTo(BigDecimal.valueOf(85)) >= 0) return "A";
+        if (average.compareTo(BigDecimal.valueOf(80)) >= 0) return "B";
+        if (average.compareTo(BigDecimal.valueOf(70)) >= 0) return "C";
+        if (average.compareTo(BigDecimal.valueOf(60)) >= 0) return "D";
+        if (average.compareTo(BigDecimal.valueOf(40)) >= 0) return "E";
+        return "F";
+    }
+
     private String learnerName(LearnerRow learner) {
         if (learner.user != null && learner.user.name() != null && !learner.user.name().isBlank()) return learner.user.name();
         return "User #" + learner.userId;
@@ -311,10 +363,6 @@ public class WeeklyGradeReportService {
     private String assessmentTitle(Assessment assessment) {
         if (assessment.getTitle() != null && !assessment.getTitle().isBlank()) return assessment.getTitle().trim();
         return "Assessment #" + assessment.getId();
-    }
-
-    private void autosize(Sheet sheet, int columns) {
-        for (int i = 0; i < columns; i++) sheet.autoSizeColumn(i);
     }
 
     private String uniqueSheetName(Workbook workbook, String rawName) {
@@ -377,11 +425,13 @@ public class WeeklyGradeReportService {
     private static final class Styles {
         private final CellStyle title;
         private final CellStyle label;
+        private final CellStyle metaText;
         private final CellStyle header;
         private final CellStyle text;
         private final CellStyle integer;
         private final CellStyle score;
         private final CellStyle lowScore;
+        private final CellStyle grade;
 
         private Styles(Workbook workbook) {
             Font titleFont = workbook.createFont();
@@ -391,27 +441,64 @@ public class WeeklyGradeReportService {
             Font boldFont = workbook.createFont();
             boldFont.setBold(true);
 
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+
+            Font lowScoreFont = workbook.createFont();
+            lowScoreFont.setBold(true);
+            lowScoreFont.setColor(IndexedColors.DARK_RED.getIndex());
+
             title = workbook.createCellStyle();
             title.setFont(titleFont);
+            title.setVerticalAlignment(VerticalAlignment.CENTER);
 
             label = workbook.createCellStyle();
             label.setFont(boldFont);
+            label.setVerticalAlignment(VerticalAlignment.CENTER);
+
+            metaText = workbook.createCellStyle();
+            metaText.setVerticalAlignment(VerticalAlignment.CENTER);
 
             header = workbook.createCellStyle();
-            header.setFont(boldFont);
+            header.setFont(headerFont);
+            header.setFillForegroundColor(IndexedColors.BLACK.getIndex());
+            header.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            header.setAlignment(HorizontalAlignment.CENTER);
+            applyTableLayout(header);
 
             text = workbook.createCellStyle();
+            text.setAlignment(HorizontalAlignment.LEFT);
+            applyTableLayout(text);
 
             integer = workbook.createCellStyle();
             integer.setDataFormat(workbook.createDataFormat().getFormat("0"));
+            integer.setAlignment(HorizontalAlignment.CENTER);
+            applyTableLayout(integer);
 
             score = workbook.createCellStyle();
             score.setDataFormat(workbook.createDataFormat().getFormat("0.##"));
+            score.setAlignment(HorizontalAlignment.CENTER);
+            applyTableLayout(score);
 
             lowScore = workbook.createCellStyle();
             lowScore.cloneStyleFrom(score);
+            lowScore.setFont(lowScoreFont);
             lowScore.setFillForegroundColor(IndexedColors.ROSE.getIndex());
             lowScore.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+            grade = workbook.createCellStyle();
+            grade.setAlignment(HorizontalAlignment.CENTER);
+            applyTableLayout(grade);
+        }
+
+        private void applyTableLayout(CellStyle style) {
+            style.setVerticalAlignment(VerticalAlignment.CENTER);
+            style.setWrapText(true);
+            style.setBorderTop(BorderStyle.THIN);
+            style.setBorderRight(BorderStyle.THIN);
+            style.setBorderBottom(BorderStyle.THIN);
+            style.setBorderLeft(BorderStyle.THIN);
         }
     }
 
