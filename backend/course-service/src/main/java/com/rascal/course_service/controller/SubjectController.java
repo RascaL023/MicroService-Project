@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.rascal.course_service.dto.mapper.SubjectMaterialMapper;
@@ -49,8 +50,11 @@ public class SubjectController {
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('subject.*', 'subject.read')")
-    public ResponseEntity<?> getAllPaged(Pageable pageable) {
-        Page<SubjectResponse> responses = subjectService.getAll(pageable)
+    public ResponseEntity<?> getAllPaged(
+        @RequestParam(required = false) String name,
+        Pageable pageable
+    ) {
+        Page<SubjectResponse> responses = subjectService.getAll(name, pageable)
             .map(SubjectMapper::toResponse);
 
         return ApiResponse.paged(

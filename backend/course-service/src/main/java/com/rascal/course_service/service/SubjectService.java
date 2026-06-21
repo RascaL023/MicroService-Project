@@ -32,8 +32,10 @@ public class SubjectService {
             .orElseThrow(() -> new NotFoundException("Subject not found"));
     }
 
-    public Page<Subject> getAll(Pageable pageable) {
-        return subjectRepository.findByDeletedAtIsNull(pageable);
+    public Page<Subject> getAll(String name, Pageable pageable) {
+        String normalizedName = normalizeSearchName(name);
+
+        return subjectRepository.searchActiveSubjects(normalizedName, pageable);
     }
 
 
@@ -66,6 +68,12 @@ public class SubjectService {
         subject.setDeletedAt(LocalDateTime.now());
 
         subjectRepository.save(subject);
+    }
+
+    private String normalizeSearchName(String name) {
+        if (name == null || name.isBlank()) return null;
+
+        return name.trim();
     }
     
 }

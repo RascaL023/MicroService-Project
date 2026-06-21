@@ -1,5 +1,6 @@
 # LAST:
     - course-service:
+        - subject search (FE) [bug]
         - learner ack assessments
         - better excel export report template
     - user-service:
@@ -23,7 +24,6 @@
 # TODO:
     - course-service: 
         - gradebook better call
-        - subject search (FE) [bug]
 
 # ??
     - deleted user on group member response mark deleted or just show
