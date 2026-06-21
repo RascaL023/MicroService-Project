@@ -1,5 +1,6 @@
 # LAST:
     - course-service:
+        - learner ack assessments
         - better excel export report template
     - user-service:
         - better excel import, and downloadable template
@@ -10,20 +11,19 @@
         - status = ACTIVE/GRADUATED/DROP_OUT
 
 # PENDING:
-    - course-service: 
-        - gradebook better call
-        - subject search (FE) [bug]
-        - rank system
     - security:
         - log activity
         - rate limiting on reverse proxy
         - laod balancer on api-gateway
+    - course-service: 
+        - rank system
     - user-service: 
         - user profile picture
 
 # TODO:
-    - course-service:
-        - learner ack assessments
+    - course-service: 
+        - gradebook better call
+        - subject search (FE) [bug]
 
 # ??
     - deleted user on group member response mark deleted or just show

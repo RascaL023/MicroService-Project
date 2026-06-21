@@ -136,4 +136,13 @@ public class AssessmentController {
 
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/acknowledgement")
+    @PreAuthorize("hasAnyAuthority('course.*', 'group.*', 'group.read', 'enrollment.*')")
+    public ResponseEntity<?> acknowledge(@PathVariable Long id) {
+        return ApiResponse.success(
+            HttpStatus.OK,
+            assessmentService.acknowledge(id)
+        );
+    }
 }

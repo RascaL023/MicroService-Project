@@ -23,5 +23,7 @@ public record AssessmentResponse(
     String originalFilename,
     String filePath,
     String mimeType,
-    Long fileSize
+    Long fileSize,
+    boolean acknowledged,
+    LocalDateTime acknowledgedAt
 ) { }

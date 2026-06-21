@@ -108,6 +108,11 @@ export type CourseDashboardSummary = {
 	groupsWithoutSchedule: number;
 };
 
+export type CourseDashboardReminder = {
+	learnerPendingAcknowledgements: number;
+	instructorPendingGrades: number;
+};
+
 export type Subject = {
 	id: number;
 	name: string;
@@ -194,6 +199,8 @@ export type Assessment = {
 	filePath?: string | null;
 	mimeType?: string | null;
 	fileSize?: number | null;
+	acknowledged: boolean;
+	acknowledgedAt?: string | null;
 };
 
 export type AssessmentGrade = {

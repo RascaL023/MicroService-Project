@@ -68,11 +68,14 @@
 	const canCreateSchedule = $derived(hasAnyAuthority(session, ['group-schedule.create', 'group-schedule.*']));
 	const canDeleteSchedule = $derived(hasAnyAuthority(session, ['group-schedule.delete', 'group-schedule.*']));
 	const isGroupInstructor = $derived(Boolean(detail?.members.some((member) =>
-		member.user?.id === session?.userId && member.role.toUpperCase().includes('INSTRUK')
+		member.user?.id === session?.userId && isInstructorRole(member.role)
+	)));
+	const isGroupLearner = $derived(Boolean(detail?.members.some((member) =>
+		member.user?.id === session?.userId && isLearnerRole(member.role)
 	)));
 	const canManageMeetings = $derived(isGroupInstructor || hasAnyAuthority(session, ['course.*', 'group.*', 'enrollment.*']));
 	const canManageAssessments = $derived(canManageMeetings);
-	const learners = $derived(detail?.members.filter((member) => member.role.toUpperCase().includes('PELAJAR') || member.role.toUpperCase().includes('LEARNER')) ?? []);
+	const learners = $derived(detail?.members.filter((member) => isLearnerRole(member.role)) ?? []);
 	const doneMeetingCount = $derived(detail?.meetings.filter((meeting) => meeting.status === 'DONE').length ?? 0);
 	const meetingOptions = $derived(detail?.meetings.filter((meeting) => meeting.id !== null) ?? []);
 
@@ -452,6 +455,27 @@
 		});
 	}
 
+	async function acknowledgeAssessment(assessment: Assessment) {
+		const current = detail;
+		if (!current || assessment.acknowledged) return;
+
+		await submit(async () => {
+			await api<unknown>(`/api/assessments/${assessment.id}/acknowledgement`, {
+				method: 'POST'
+			});
+
+			detail = {
+				...current,
+				assessments: current.assessments.map((item) =>
+					item.id === assessment.id
+						? { ...item, acknowledged: true, acknowledgedAt: new Date().toISOString() }
+						: item
+				)
+			};
+			success = 'Assessment ditandai selesai.';
+		});
+	}
+
 	function askConfirm(config: { title: string; message: string; confirmLabel?: string }, action: () => Promise<void>) {
 		confirmState = { open: true, title: config.title, message: config.message, confirmLabel: config.confirmLabel ?? 'Ya, lanjutkan' };
 		pendingConfirm = action;
@@ -569,6 +593,24 @@
 
 	function isMeetingAssessmentType(type: string) {
 		return type === 'ASSIGNMENT' || type === 'QUIZ';
+	}
+
+	function isAcknowledgeableAssessment(type: string) {
+		return type === 'ASSIGNMENT' || type === 'QUIZ';
+	}
+
+	function canAcknowledgeAssessment(assessment: Assessment) {
+		return isGroupLearner && isAcknowledgeableAssessment(assessment.type);
+	}
+
+	function isInstructorRole(role: string) {
+		const normalized = role.toUpperCase();
+		return normalized.includes('INSTRUK') || normalized.includes('INSTRUCTOR');
+	}
+
+	function isLearnerRole(role: string) {
+		const normalized = role.toUpperCase();
+		return normalized.includes('PELAJAR') || normalized.includes('LEARNER');
 	}
 
 	function formatDateTime(value?: string | null) {
@@ -792,6 +834,19 @@
 										<button class="btn btn-ghost icon-btn" type="button" aria-label="Download assessment" onclick={() => downloadAssessment(assessment)}>
 											<Icons name="download" size={16} />
 										</button>
+									{/if}
+									{#if canAcknowledgeAssessment(assessment)}
+										{#if assessment.acknowledged}
+											<button class="btn btn-secondary compact ack-button" type="button" disabled>
+												<Icons name="checkCircle" size={16} />
+												<span>Done</span>
+											</button>
+										{:else}
+											<button class="btn btn-primary compact ack-button" type="button" onclick={() => acknowledgeAssessment(assessment)}>
+												<Icons name="checkCircle" size={16} />
+												<span>Mark done</span>
+											</button>
+										{/if}
 									{/if}
 									{#if canManageAssessments}
 										<button class="btn btn-ghost icon-btn" type="button" aria-label="Beri nilai" onclick={() => openGradeModal(assessment)}>
@@ -1684,6 +1739,10 @@
 	.compact {
 		padding: 0.5rem 0.75rem;
 		font-size: 0.8rem;
+	}
+
+	.ack-button {
+		white-space: nowrap;
 	}
 
 	.danger {

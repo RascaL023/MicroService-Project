@@ -4,15 +4,22 @@
 	import Notice from '$lib/components/Notice.svelte';
 	import { api, dayLabel, pageItems, paginationMeta, timeLabel } from '$lib/api';
 	import type {
+		CourseDashboardReminder,
 		Enrollment,
 		GroupSchedule,
 		PageData,
 		PaginationMeta
 	} from '$lib/types';
 
+	const emptyReminders: CourseDashboardReminder = {
+		learnerPendingAcknowledgements: 0,
+		instructorPendingGrades: 0
+	};
+
 	let enrollments = $state<Enrollment[]>([]);
 	let allSchedules = $state<GroupSchedule[]>([]);
 	let schedules = $state<GroupSchedule[]>([]);
+	let reminders = $state<CourseDashboardReminder>(emptyReminders);
 	let enrollmentMeta = $state<PaginationMeta>({ page: 0, size: 4, totalPages: 1, totalElements: 0 });
 	let loading = $state(true);
 	let error = $state('');
@@ -23,13 +30,15 @@
 		loading = true;
 		error = '';
 		try {
-			const [enrollmentPayload, schedulePayload] = await Promise.all([
+			const [enrollmentPayload, schedulePayload, reminderPayload] = await Promise.all([
 				api<PageData<Enrollment> | Enrollment[]>('/api/enrollments/me?page=0&size=4&sort=id,desc'),
-				api<PageData<GroupSchedule> | GroupSchedule[]>('/api/group-schedules/me?page=0&size=50&sort=dayOfWeek,asc')
+				api<PageData<GroupSchedule> | GroupSchedule[]>('/api/group-schedules/me?page=0&size=50&sort=dayOfWeek,asc'),
+				api<CourseDashboardReminder>('/api/courses/dashboard-reminders')
 			]);
 			enrollments = pageItems(enrollmentPayload);
 			allSchedules = nearestSchedules(pageItems(schedulePayload));
 			schedules = allSchedules.slice(0, 5);
+			reminders = reminderPayload.data ?? emptyReminders;
 			enrollmentMeta = paginationMeta(enrollmentPayload, enrollmentMeta);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Gagal memuat dashboard.';
@@ -109,6 +118,18 @@
 			<div class="metric-icon amber"><Icons name="calendar" size={20} /></div>
 			<div><span>Jadwal Aktif</span><strong>{allSchedules.length}</strong></div>
 		</article>
+		{#if reminders.learnerPendingAcknowledgements > 0}
+			<article class="metric reminder">
+				<div class="metric-icon amber"><Icons name="alertTriangle" size={20} /></div>
+				<div><span>Belum Mark Done</span><strong>{reminders.learnerPendingAcknowledgements}</strong></div>
+			</article>
+		{/if}
+		{#if reminders.instructorPendingGrades > 0}
+			<article class="metric reminder">
+				<div class="metric-icon rose"><Icons name="checkCircle" size={20} /></div>
+				<div><span>Belum Dinilai</span><strong>{reminders.instructorPendingGrades}</strong></div>
+			</article>
+		{/if}
 	</section>
 
 	<section class="dashboard-grid">
@@ -202,7 +223,7 @@
 
 	.metric-grid {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 		gap: 1rem;
 		margin-bottom: 1.25rem;
 	}
@@ -251,6 +272,11 @@
 	}
 
 	.amber { color: var(--warning); background: color-mix(in srgb, var(--warning) 12%, transparent); }
+	.rose { color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
+
+	.reminder {
+		border-color: color-mix(in srgb, var(--warning) 22%, var(--border));
+	}
 
 	.dashboard-grid {
 		display: grid;
@@ -412,7 +438,7 @@
 
 	@media (max-width: 1050px) {
 		.metric-grid {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 		}
 	}
 

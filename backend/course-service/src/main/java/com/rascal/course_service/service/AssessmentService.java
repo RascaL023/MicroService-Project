@@ -2,6 +2,7 @@ package com.rascal.course_service.service;
 
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -9,6 +10,7 @@ import java.util.Set;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,13 +18,18 @@ import org.springframework.web.multipart.MultipartFile;
 import com.rascal.course_service.dto.mapper.AssessmentMapper;
 import com.rascal.course_service.dto.request.AssessmentPatchRequest;
 import com.rascal.course_service.dto.request.AssessmentRequest;
+import com.rascal.course_service.dto.response.AssessmentAcknowledgementResponse;
 import com.rascal.course_service.dto.response.AssessmentResponse;
 import com.rascal.course_service.entity.Assessment;
+import com.rascal.course_service.entity.AssessmentAcknowledgement;
 import com.rascal.course_service.entity.Group;
 import com.rascal.course_service.entity.GroupMeeting;
 import com.rascal.course_service.enumerated.AssessmentTypeEnum;
+import com.rascal.course_service.enumerated.CourseRoleEnum;
 import com.rascal.course_service.enumerated.CourseStatusEnum;
+import com.rascal.course_service.repository.AssessmentAcknowledgementRepository;
 import com.rascal.course_service.repository.AssessmentRepository;
+import com.rascal.course_service.repository.EnrollmentRepository;
 import com.rascal.course_service.repository.GroupMeetingRepository;
 import com.rascal.course_service.repository.GroupRepository;
 
@@ -42,23 +49,32 @@ public class AssessmentService {
     );
 
     private final AssessmentRepository assessmentRepository;
+    private final AssessmentAcknowledgementRepository assessmentAcknowledgementRepository;
+    private final EnrollmentRepository enrollmentRepository;
     private final GroupRepository groupRepository;
     private final GroupMeetingRepository groupMeetingRepository;
     private final CoursePermissionService coursePermissionService;
+    private final CurrentUserService currentUserService;
     private final FileStorageService fileStorageService;
     private final FileStorageService.FileRule fileRule;
 
     public AssessmentService(
         AssessmentRepository assessmentRepository,
+        AssessmentAcknowledgementRepository assessmentAcknowledgementRepository,
+        EnrollmentRepository enrollmentRepository,
         GroupRepository groupRepository,
         GroupMeetingRepository groupMeetingRepository,
         CoursePermissionService coursePermissionService,
+        CurrentUserService currentUserService,
         FileStorageService fileStorageService
     ) {
         this.assessmentRepository = assessmentRepository;
+        this.assessmentAcknowledgementRepository = assessmentAcknowledgementRepository;
+        this.enrollmentRepository = enrollmentRepository;
         this.groupRepository = groupRepository;
         this.groupMeetingRepository = groupMeetingRepository;
         this.coursePermissionService = coursePermissionService;
+        this.currentUserService = currentUserService;
         this.fileStorageService = fileStorageService;
         this.fileRule = new FileStorageService.FileRule(
             false,
@@ -103,8 +119,15 @@ public class AssessmentService {
 
     @Transactional(readOnly = true)
     public List<AssessmentResponse> getByGroupId(Long groupId) {
-        return assessmentRepository.findActiveByGroupIdOrderByDueAt(groupId)
-            .stream().map(AssessmentMapper::toResponse)
+        List<Assessment> assessments = assessmentRepository.findActiveByGroupIdOrderByDueAt(groupId);
+        Map<Long, LocalDateTime> acknowledgements = getCurrentUserAcknowledgements(assessments);
+
+        return assessments.stream()
+            .map(assessment -> AssessmentMapper.toResponse(
+                assessment,
+                acknowledgements.containsKey(assessment.getId()),
+                acknowledgements.get(assessment.getId())
+            ))
             .toList();
     }
 
@@ -210,6 +233,64 @@ public class AssessmentService {
         fileStorageService.delete(assessment.getStoredFilename() == null ? null : physicalPath(assessment));
     }
 
+    public AssessmentAcknowledgementResponse acknowledge(Long id) {
+        Assessment assessment = getById(id);
+        Long userId = currentUserService.getUserId();
+
+        rejectInactiveGroup(assessment.getGroup());
+
+        if (!isAcknowledgeableType(assessment.getType()))
+            throw new BadRequestException("Only assignment and quiz can be marked done");
+
+        boolean learner = enrollmentRepository.existsByUserIdAndGroupIdAndRoleAndDeletedAtIsNull(
+            userId,
+            assessment.getGroup().getId(),
+            CourseRoleEnum.LEARNER
+        );
+        if (!learner) throw new AccessDeniedException("Forbidden");
+
+        LocalDateTime now = LocalDateTime.now();
+        AssessmentAcknowledgement acknowledgement = assessmentAcknowledgementRepository
+            .findByAssessmentIdAndUserId(assessment.getId(), userId)
+            .orElseGet(() -> {
+                AssessmentAcknowledgement created = new AssessmentAcknowledgement();
+                created.setAssessment(assessment);
+                created.setUserId(userId);
+                created.setCreatedAt(now);
+                return created;
+            });
+
+        acknowledgement.setDoneAt(now);
+        acknowledgement.setDeletedAt(null);
+        acknowledgement.setUpdatedAt(acknowledgement.getId() == null ? null : now);
+        assessmentAcknowledgementRepository.save(acknowledgement);
+
+        return new AssessmentAcknowledgementResponse(
+            assessment.getId(),
+            userId,
+            true,
+            acknowledgement.getDoneAt()
+        );
+    }
+
+    private Map<Long, LocalDateTime> getCurrentUserAcknowledgements(List<Assessment> assessments) {
+        if (assessments.isEmpty()) return Map.of();
+
+        Long userId = currentUserService.getUserId();
+        List<Long> assessmentIds = assessments.stream()
+            .map(Assessment::getId)
+            .toList();
+        Map<Long, LocalDateTime> acknowledgements = new HashMap<>();
+        assessmentAcknowledgementRepository
+            .findActiveByAssessmentIdsAndUserId(assessmentIds, userId)
+            .forEach(acknowledgement -> acknowledgements.put(
+                acknowledgement.getAssessment().getId(),
+                acknowledgement.getDoneAt()
+            ));
+
+        return acknowledgements;
+    }
+
     private Group getActiveGroup(Long groupId) {
         if (groupId == null) throw new BadRequestException("Group ID must be filled");
 
@@ -239,6 +320,10 @@ public class AssessmentService {
     }
 
     private boolean requiresMeeting(AssessmentTypeEnum type) {
+        return type == AssessmentTypeEnum.ASSIGNMENT || type == AssessmentTypeEnum.QUIZ;
+    }
+
+    private boolean isAcknowledgeableType(AssessmentTypeEnum type) {
         return type == AssessmentTypeEnum.ASSIGNMENT || type == AssessmentTypeEnum.QUIZ;
     }
 

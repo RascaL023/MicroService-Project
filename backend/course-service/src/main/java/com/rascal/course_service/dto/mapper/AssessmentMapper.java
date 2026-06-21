@@ -1,5 +1,7 @@
 package com.rascal.course_service.dto.mapper;
 
+import java.time.LocalDateTime;
+
 import com.rascal.course_service.dto.response.AssessmentResponse;
 import com.rascal.course_service.entity.Assessment;
 import com.rascal.course_service.entity.Group;
@@ -12,6 +14,14 @@ public final class AssessmentMapper {
     private AssessmentMapper() { }
 
     public static AssessmentResponse toResponse(Assessment assessment) {
+        return toResponse(assessment, false, null);
+    }
+
+    public static AssessmentResponse toResponse(
+        Assessment assessment,
+        boolean acknowledged,
+        LocalDateTime acknowledgedAt
+    ) {
         Group group = assessment.getGroup();
         Subject subject = group.getSubject();
         GroupMeeting meeting = assessment.getGroupMeeting();
@@ -37,7 +47,9 @@ public final class AssessmentMapper {
             assessment.getOriginalFilename(),
             assessment.getFilePath(),
             assessment.getMimeType(),
-            assessment.getFileSize()
+            assessment.getFileSize(),
+            acknowledged,
+            acknowledgedAt
         );
     }
 }
