@@ -19,7 +19,7 @@ public interface SubjectRepository extends JpaRepository<Subject, Long> {
         select s
         from Subject s
         where s.deletedAt is null
-            and (:name is null or lower(s.name) like lower(concat('%', :name, '%')))
+            and (:name is null or lower(s.name) like lower(concat('%', cast(:name as string), '%')))
     """)
     Page<Subject> searchActiveSubjects(
         @Param("name") String name,
