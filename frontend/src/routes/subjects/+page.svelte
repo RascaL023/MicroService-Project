@@ -285,8 +285,8 @@
 
 	.subject-card {
 		position: relative;
-		display: flex;
-		justify-content: space-between;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: flex-start;
 		gap: 0.8rem;
 		min-height: 104px;
@@ -304,14 +304,19 @@
 
 	.subject-main {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 0.85rem;
+		min-width: 0;
+	}
+
+	.subject-main > div:last-child {
 		min-width: 0;
 	}
     
 	.subject-actions {
 		display: flex;
 		gap: 0.25rem;
+		flex: 0 0 auto;
 	}
 
 	.subject-icon {
@@ -328,6 +333,8 @@
 	.subject-name {
 		font-weight: 700;
 		line-height: 1.3;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
     
 	.subject-id {

@@ -30,6 +30,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellAddress;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -276,30 +277,41 @@ public class WeeklyGradeReportService {
     private int writeMeta(Sheet sheet, Styles styles, int rowIndex, ReportData data) {
         Row titleRow = sheet.createRow(rowIndex++);
         titleRow.setHeightInPoints(24);
-        writeCell(titleRow, 0, "Laporan Nilai Mingguan", styles.title);
+        writeMergedRow(sheet, titleRow, rowIndex - 1, 0, 3, "Laporan Nilai Divisi Pendidikan", styles.title);
 
         Row academicYearRow = sheet.createRow(rowIndex++);
         academicYearRow.setHeightInPoints(20);
-        writeCell(academicYearRow, 0, "Tahun Akademik", styles.label);
-        writeCell(academicYearRow, 1, data.academicYear, styles.metaText);
+        writeMetaPair(sheet, academicYearRow, rowIndex - 1, "Periode", data.academicYear, styles);
 
         Row subjectRow = sheet.createRow(rowIndex++);
         subjectRow.setHeightInPoints(20);
-        writeCell(subjectRow, 0, "Subject", styles.label);
-        writeCell(subjectRow, 1, data.subject.getName(), styles.metaText);
+        writeMetaPair(sheet, subjectRow, rowIndex - 1, "Subject", data.subject.getName(), styles);
 
         Row generatedRow = sheet.createRow(rowIndex++);
         generatedRow.setHeightInPoints(20);
-        writeCell(generatedRow, 0, "Generated At", styles.label);
-        writeCell(generatedRow, 1, LocalDateTime.now().format(DATE_TIME_FORMAT), styles.metaText);
+        writeMetaPair(sheet, generatedRow, rowIndex - 1, "Generated At", LocalDateTime.now().format(DATE_TIME_FORMAT), styles);
 
         return rowIndex;
     }
 
+    private void writeMetaPair(Sheet sheet, Row row, int rowIndex, String label, String value, Styles styles) {
+        writeMergedRow(sheet, row, rowIndex, 0, 1, label, styles.label);
+        writeMergedRow(sheet, row, rowIndex, 2, 3, value, styles.metaText);
+    }
+
+    private void writeMergedRow(Sheet sheet, Row row, int rowIndex, int firstCol, int lastCol, String value, CellStyle style) {
+        for (int col = firstCol; col <= lastCol; col++) {
+            writeCell(row, col, col == firstCol ? value : "", style);
+        }
+        if (firstCol != lastCol) {
+            sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, firstCol, lastCol));
+        }
+    }
+
     private void configureSheet(Sheet sheet, int assessmentColumnCount) {
         sheet.setDefaultRowHeightInPoints(20);
-        sheet.setColumnWidth(0, 7 * 256);
-        sheet.setColumnWidth(1, 30 * 256);
+        sheet.setColumnWidth(0, 6 * 256);
+        sheet.setColumnWidth(1, 40 * 256);
         for (int i = 0; i < assessmentColumnCount; i++) {
             sheet.setColumnWidth(i + 2, 14 * 256);
         }
@@ -485,7 +497,7 @@ public class WeeklyGradeReportService {
 
             header = workbook.createCellStyle();
             header.setFont(headerFont);
-            header.setFillForegroundColor(IndexedColors.BLACK.getIndex());
+            header.setFillForegroundColor(IndexedColors.SEA_GREEN.getIndex());
             header.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             header.setAlignment(HorizontalAlignment.CENTER);
             applyTableLayout(header);

@@ -106,6 +106,15 @@
 	function safeFilename(value: string) {
 		return value.replace(/[^a-zA-Z0-9._-]+/g, '-');
 	}
+
+	function selectedSubjectName() {
+		return subjects.find((subject) => String(subject.id) === subjectId)?.name ?? 'Pilih subject';
+	}
+
+	function previewFilename() {
+		if (!academicYear.trim() || !subjectId) return 'weekly-grades-{periode}-{subject}.xlsx';
+		return `weekly-grades-${safeFilename(academicYear.trim())}-${safeFilename(selectedSubjectName())}.xlsx`;
+	}
 </script>
 
 <svelte:head><title>Laporan - Divdik Course</title></svelte:head>
@@ -119,39 +128,89 @@
 
 	<Notice {error} {success} />
 
-	<section class="report-card">
-		<div class="report-head">
-			<div class="report-icon"><Icons name="download" size={22} /></div>
-			<div>
-				<h2>Nilai Mingguan Learner</h2>
-				<p>Workbook berisi sheet Tugas, Quiz, UTS, dan UAS dengan format tabel nilai per peserta.</p>
+	<section class="report-workspace">
+		<div class="report-main">
+			<div class="report-head">
+				<div class="report-icon"><Icons name="file" size={22} /></div>
+				<div>
+					<h2>Nilai Mingguan Learner</h2>
+					<p>Export workbook nilai lintas group berdasarkan subject dan tahun akademik.</p>
+				</div>
+			</div>
+
+			<form class="report-form" onsubmit={(event) => { event.preventDefault(); void downloadWeeklyGrades(); }}>
+				<label>
+					<span>Tahun Akademik</span>
+					<input bind:value={academicYear} placeholder="2026/2027" required />
+				</label>
+				<label>
+					<span>Subject</span>
+					<select bind:value={subjectId} disabled={subjectsLoading} required>
+						<option value="">{subjectsLoading ? 'Memuat subject...' : 'Pilih subject'}</option>
+						{#each subjects as subject}
+							<option value={String(subject.id)}>{subject.name}</option>
+						{/each}
+					</select>
+				</label>
+				<button class="btn btn-primary filter-submit" type="submit" disabled={loading}>
+					<Icons name="download" size={16} />
+					<span>{loading ? 'Membuat...' : 'Download Excel'}</span>
+				</button>
+			</form>
+
+			<div class="report-meta">
+				<div>
+					<span>Output</span>
+					<strong>{previewFilename()}</strong>
+				</div>
+				<div>
+					<span>Sheet</span>
+					<strong>Tugas, Quiz, UTS, UAS</strong>
+				</div>
+				<div>
+					<span>Kolom</span>
+					<strong>No, Nama, Nilai, Rata-rata, Grade</strong>
+				</div>
 			</div>
 		</div>
 
-		<form class="report-form" onsubmit={(event) => { event.preventDefault(); void downloadWeeklyGrades(); }}>
-			<label>
-				<span>Tahun Akademik</span>
-				<input bind:value={academicYear} placeholder="2026/2027" required />
-			</label>
-			<label>
-				<span>Subject</span>
-				<select bind:value={subjectId} disabled={subjectsLoading} required>
-					<option value="">{subjectsLoading ? 'Memuat subject...' : 'Pilih subject'}</option>
-					{#each subjects as subject}
-						<option value={String(subject.id)}>{subject.name}</option>
-					{/each}
-				</select>
-			</label>
-			<button class="btn btn-primary filter-submit" type="submit" disabled={loading}>
-				<Icons name="download" size={16} />
-				<span>{loading ? 'Membuat...' : 'Download Excel'}</span>
-			</button>
-		</form>
+		<aside class="report-preview" aria-label="Preview laporan">
+			<div class="preview-top">
+				<Icons name="book" size={18} />
+				<span>Preview Workbook</span>
+			</div>
+			<div class="sheet-tabs">
+				<span>Tugas</span>
+				<span>Quiz</span>
+				<span>UTS</span>
+				<span>UAS</span>
+			</div>
+			<div class="mini-sheet">
+				<div class="mini-title">Laporan Nilai Divisi Pendidikan</div>
+				<div class="mini-row"><span>Periode</span><strong>{academicYear || '-'}</strong></div>
+				<div class="mini-row"><span>Subject</span><strong>{selectedSubjectName()}</strong></div>
+				<div class="mini-table">
+					<span>No</span><span>Nama Peserta</span><span>Tugas 1</span><span>Rata</span><span>Grade</span>
+					<span>1</span><span>Muhammad Asep</span><span>98</span><span>89.33</span><span>A</span>
+				</div>
+			</div>
+		</aside>
 	</section>
 </AccessPanel>
 
 <style>
-	.report-card {
+	.report-workspace {
+		display: grid;
+		grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+		gap: 1rem;
+		align-items: stretch;
+	}
+
+	.report-main,
+	.report-preview {
+		border: 1px solid var(--border);
+		background: var(--bg-surface);
+		border-radius: var(--radius);
 		padding: 1.1rem;
 	}
 
@@ -180,7 +239,7 @@
 	.report-head p {
 		margin: 0.2rem 0 0;
 		color: var(--text-muted);
-		font-size: 0.78rem;
+		font-size: 0.82rem;
 	}
 
 	.report-form {
@@ -195,14 +254,137 @@
 		gap: 0.35rem;
 	}
 
-	.report-form span {
+	.report-form label > span {
 		color: var(--text-muted);
 		font-size: 0.75rem;
 		font-weight: 700;
 	}
 
+	.report-meta {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.7rem;
+		margin-top: 1rem;
+	}
+
+	.report-meta div {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		padding: 0.75rem;
+		background: color-mix(in srgb, var(--bg-surface) 88%, var(--primary) 12%);
+		min-width: 0;
+	}
+
+	.report-meta span,
+	.preview-top span {
+		display: block;
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.report-meta strong {
+		display: block;
+		margin-top: 0.3rem;
+		font-size: 0.86rem;
+		overflow-wrap: anywhere;
+	}
+
+	.report-preview {
+		display: grid;
+		gap: 0.9rem;
+		align-content: start;
+	}
+
+	.preview-top {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.sheet-tabs {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+	}
+
+	.sheet-tabs span {
+		padding: 0.55rem 0.4rem;
+		text-align: center;
+		font-size: 0.74rem;
+		font-weight: 800;
+		border-right: 1px solid var(--border);
+	}
+
+	.sheet-tabs span:first-child {
+		background: var(--primary-soft);
+		color: var(--primary);
+	}
+
+	.sheet-tabs span:last-child {
+		border-right: 0;
+	}
+
+	.mini-sheet {
+		border: 1px solid var(--border);
+		background: var(--bg-main);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+		font-size: 0.76rem;
+	}
+
+	.mini-title {
+		padding: 0.65rem;
+		font-weight: 900;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.mini-row {
+		display: grid;
+		grid-template-columns: 90px 1fr;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.mini-row span,
+	.mini-row strong {
+		padding: 0.45rem 0.6rem;
+	}
+
+	.mini-row span {
+		font-weight: 800;
+		border-right: 1px solid var(--border);
+	}
+
+	.mini-table {
+		display: grid;
+		grid-template-columns: 42px minmax(92px, 1fr) 70px 66px 54px;
+		overflow-x: auto;
+	}
+
+	.mini-table span {
+		padding: 0.48rem;
+		border-right: 1px solid var(--border);
+		border-bottom: 1px solid var(--border);
+		white-space: nowrap;
+	}
+
+	.mini-table span:nth-child(-n + 5) {
+		background: var(--primary);
+		color: white;
+		font-weight: 800;
+	}
+
 	@media (max-width: 820px) {
+		.report-workspace,
 		.report-form {
+			grid-template-columns: 1fr;
+		}
+
+		.report-meta {
 			grid-template-columns: 1fr;
 		}
 	}

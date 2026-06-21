@@ -326,7 +326,7 @@
 	.major-card {
 		position: relative;
 		display: grid;
-		grid-template-columns: auto 1fr;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		gap: 0.85rem;
 		padding: 1rem;
 		background: var(--bg-surface);
@@ -362,6 +362,8 @@
 	.major-body h3 {
 		margin: 0;
 		font-size: 1rem;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
 
 	.major-body p {
@@ -371,11 +373,9 @@
 	}
 
 	.major-actions {
-		position: absolute;
-		top: 0.7rem;
-		right: 0.7rem;
 		display: flex;
 		gap: 0.25rem;
+		align-self: start;
 	}
 
 	.icon-btn {

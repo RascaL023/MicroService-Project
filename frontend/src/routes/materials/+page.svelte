@@ -373,7 +373,7 @@
 				Rencana Pertemuan
 			</button>
 			<button class:active={activeTab === 'modules'} type="button" onclick={() => (activeTab = 'modules')}>
-				File Modul
+				File Modul / Soal Umum
 			</button>
 		</div>
 
