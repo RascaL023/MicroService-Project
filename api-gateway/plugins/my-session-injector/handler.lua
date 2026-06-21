@@ -1,6 +1,34 @@
 local redis = require("resty.redis")
 local cjson = require("cjson.safe")
 
+local function stringify_list(value)
+    if value == nil then
+        return nil
+    end
+
+    if type(value) == "table" then
+        return table.concat(value, ",")
+    end
+
+    return tostring(value)
+end
+
+local function request_id()
+    return kong.request.get_header("X-Request-Id")
+        or kong.request.get_header("X-Correlation-Id")
+        or ngx.var.request_id
+end
+
+local function route_name()
+    local route = kong.router.get_route()
+    return route and route.name or nil
+end
+
+local function service_name()
+    local service = kong.router.get_service()
+    return service and service.name or nil
+end
+
 local MySessionInjector = {
     PRIORITY = 1000,
     VERSION = "1.0.0",
@@ -136,32 +164,15 @@ function MySessionInjector:access(conf)
         tostring(subject)
     )
 
-    if session.roles then
-        if type(session.roles) == "table" then
-            kong.service.request.set_header(
-                conf.session_header_user_roles,
-                table.concat(session.roles, ",")
-            )
-        else
-            kong.service.request.set_header(
-                conf.session_header_user_roles,
-                tostring(session.roles)
-            )
-        end
+    -- Logging
+    local roles = stringify_list(session.roles)
+    if roles then
+        kong.service.request.set_header(conf.session_header_user_roles, roles)
     end
 
-    if session.authorities then
-        if type(session.authorities) == "table" then
-            kong.service.request.set_header(
-                conf.session_header_user_authorities,
-                table.concat(session.authorities, ",")
-            )
-        else
-            kong.service.request.set_header(
-                conf.session_header_user_authorities,
-                tostring(session.authorities)
-            )
-        end
+    local authorities = stringify_list(session.authorities)
+    if authorities then
+        kong.service.request.set_header(conf.session_header_user_authorities, authorities)
     end
 
     kong.service.request.set_header(
@@ -173,8 +184,47 @@ function MySessionInjector:access(conf)
     kong.service.request.clear_header("authorization")
     kong.service.request.clear_header("Authorization")
 
+    kong.ctx.shared.request_audit = {
+        user_id = tostring(subject),
+        roles = roles,
+        session_id_hint = string.sub(token, 1, 8)
+    }
+
     kong.log.debug("[session-injector] Injected session for user: ", subject)
 
+end
+
+function MySessionInjector:log(conf)
+    if not conf.audit_enabled then return end
+
+    local audit = kong.ctx.shared.request_audit or {}
+    local serialized = kong.log.serialize()
+    local entry = {
+        type = "request_audit",
+        timestamp = ngx.now(),
+        request_id = request_id(),
+        user_id = audit.user_id,
+        roles = audit.roles,
+        session_id_hint = audit.session_id_hint,
+        client_ip = kong.client.get_forwarded_ip(),
+        method = kong.request.get_method(),
+        path = kong.request.get_path(),
+        query = kong.request.get_raw_query(),
+        status = kong.response.get_status(),
+        route = route_name(),
+        service = service_name(),
+        latencies = serialized and serialized.latencies or nil,
+        user_agent = kong.request.get_header("User-Agent")
+    }
+
+    local encoded = cjson.encode(entry)
+    if conf.audit_log_level == "warn" then
+        kong.log.warn(encoded)
+    elseif conf.audit_log_level == "info" then
+        kong.log.info(encoded)
+    else
+        kong.log.notice(encoded)
+    end
 end
 
 return MySessionInjector

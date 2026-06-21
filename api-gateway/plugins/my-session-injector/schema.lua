@@ -37,6 +37,15 @@ return {
                     type = "string",
                     default = "X-Internal-Signature"
                 }},
+                { audit_enabled = {
+                    type = "boolean",
+                    default = true
+                }},
+                { audit_log_level = {
+                    type = "string",
+                    default = "notice",
+                    one_of = { "notice", "info", "warn" }
+                }},
             }
         }}
     }

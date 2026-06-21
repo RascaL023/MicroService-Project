@@ -1,4 +1,6 @@
 # LAST:
+    - security:
+        - kong simple log request audit
     - course-service:
         - gradebook better call
         - subject search (FE) [bug]
@@ -7,10 +9,6 @@
     - user-service:
         - better excel import, and downloadable template
         - add logic on user status
-        - profile page:
-            - update email
-        - add majors
-        - status = ACTIVE/GRADUATED/DROP_OUT
 
 # PENDING:
     - course-service: 
@@ -20,7 +18,6 @@
 
 # TODO:
     - security:
-        - log activity
         - rate limiting on reverse proxy
         - laod balancer on api-gateway
 
