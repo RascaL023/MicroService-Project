@@ -1,25 +1,22 @@
 # LAST:
     - security:
         - kong simple log request audit
+        - rate limiting on reverse proxy
     - course-service:
         - gradebook better call
         - subject search (FE) [bug]
         - learner ack assessments
         - better excel export report template
-    - user-service:
-        - better excel import, and downloadable template
-        - add logic on user status
 
 # PENDING:
-    - course-service: 
-        - rank system
     - user-service: 
         - user profile picture
+    - security:
+        - laod balancer on api-gateway
 
 # TODO:
-    - security:
-        - rate limiting on reverse proxy
-        - laod balancer on api-gateway
+    - auth-service:
+        - search by email, filter by status
 
 # ??
     - deleted user on group member response mark deleted or just show
