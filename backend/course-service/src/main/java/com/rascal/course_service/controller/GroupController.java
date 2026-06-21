@@ -21,6 +21,7 @@ import com.rascal.course_service.dto.request.GroupPatchRequest;
 import com.rascal.course_service.dto.request.GroupRequest;
 import com.rascal.course_service.dto.response.GroupResponse;
 import com.rascal.course_service.entity.Group;
+import com.rascal.course_service.service.AssessmentGradeService;
 import com.rascal.course_service.service.GroupService;
 
 import id.rascal.response_kit.util.ApiResponse;
@@ -31,9 +32,14 @@ import jakarta.validation.Valid;
 public class GroupController {
 
     private final GroupService groupService;
+    private final AssessmentGradeService assessmentGradeService;
 
-    public GroupController(GroupService groupService) {
+    public GroupController(
+        GroupService groupService,
+        AssessmentGradeService assessmentGradeService
+    ) {
         this.groupService = groupService;
+        this.assessmentGradeService = assessmentGradeService;
     }
 
     @GetMapping
@@ -58,6 +64,15 @@ public class GroupController {
         return ApiResponse.success(
             HttpStatus.OK,
             groupService.getDetailById(id)
+        );
+    }
+
+    @GetMapping("/{id}/gradebook")
+    @PreAuthorize("hasAnyAuthority('group.*', 'group.read')")
+    public ResponseEntity<?> getGradebook(@PathVariable Long id) {
+        return ApiResponse.success(
+            HttpStatus.OK,
+            assessmentGradeService.getGradebookByGroupId(id)
         );
     }
 

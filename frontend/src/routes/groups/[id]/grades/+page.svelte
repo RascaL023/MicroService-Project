@@ -8,11 +8,11 @@
 	import Notice from '$lib/components/Notice.svelte';
 	import PageTitle from '$lib/components/PageTitle.svelte';
 	import { api, readSession } from '$lib/api';
-	import type { Assessment, AssessmentGrade, GroupDetail, GroupMember, LoginData } from '$lib/types';
+	import type { Assessment, AssessmentGrade, GroupGradebook, GroupMember, LoginData } from '$lib/types';
 
 	type GradeMap = Record<number, Record<number, AssessmentGrade>>;
 
-	let detail = $state<GroupDetail | null>(null);
+	let detail = $state<GroupGradebook | null>(null);
 	let session = $state<LoginData | null>(null);
 	let gradeMap = $state<GradeMap>({});
 	let tableType = $state<'ASSIGNMENT' | 'QUIZ'>('ASSIGNMENT');
@@ -43,29 +43,25 @@
 		error = '';
 		success = '';
 		try {
-			const payload = await api<GroupDetail>(`/api/groups/${groupId}`);
-			if (!payload.data) throw new Error('Detail group kosong.');
+			const payload = await api<GroupGradebook>(`/api/groups/${groupId}/gradebook`);
+			if (!payload.data) throw new Error('Gradebook group kosong.');
 			detail = payload.data;
 
-			const assessments = payload.data.assessments;
-			const gradeEntries = await Promise.all(assessments.map(async (assessment) => {
-				const gradePayload = await api<AssessmentGrade[]>(`/api/assessments/${assessment.id}/grades`);
-				return [assessment.id, gradePayload.data ?? []] as const;
-			}));
-
-			const nextMap: GradeMap = {};
-			for (const [assessmentId, grades] of gradeEntries) {
-				nextMap[assessmentId] = {};
-				for (const grade of grades) {
-					nextMap[assessmentId][grade.user.id] = grade;
-				}
-			}
-			gradeMap = nextMap;
+			gradeMap = toGradeMap(payload.data.grades);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Gagal memuat gradebook.';
 		} finally {
 			loading = false;
 		}
+	}
+
+	function toGradeMap(grades: AssessmentGrade[]) {
+		const nextMap: GradeMap = {};
+		for (const grade of grades) {
+			nextMap[grade.assessmentId] ??= {};
+			nextMap[grade.assessmentId][grade.user.id] = grade;
+		}
+		return nextMap;
 	}
 
 	function isLearner(member: GroupMember) {

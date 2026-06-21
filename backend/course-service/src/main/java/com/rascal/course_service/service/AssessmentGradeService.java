@@ -13,17 +13,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.rascal.course_service.dto.mapper.AssessmentGradeMapper;
+import com.rascal.course_service.dto.mapper.AssessmentMapper;
+import com.rascal.course_service.dto.mapper.GroupMapper;
 import com.rascal.course_service.dto.request.AssessmentGradeBatchRequest;
 import com.rascal.course_service.dto.request.AssessmentGradeRequest;
 import com.rascal.course_service.dto.response.AssessmentGradeResponse;
+import com.rascal.course_service.dto.response.GroupGradebookResponse;
+import com.rascal.course_service.dto.response.GroupMemberResponse;
 import com.rascal.course_service.dto.response.UserLookupResponse;
 import com.rascal.course_service.entity.Assessment;
 import com.rascal.course_service.entity.AssessmentGrade;
 import com.rascal.course_service.entity.Enrollment;
+import com.rascal.course_service.entity.Group;
 import com.rascal.course_service.enumerated.CourseRoleEnum;
 import com.rascal.course_service.repository.AssessmentGradeRepository;
 import com.rascal.course_service.repository.AssessmentRepository;
 import com.rascal.course_service.repository.EnrollmentRepository;
+import com.rascal.course_service.repository.GroupRepository;
 
 import id.rascal.response_kit.exception.BadRequestException;
 import id.rascal.response_kit.exception.NotFoundException;
@@ -38,6 +44,7 @@ public class AssessmentGradeService {
     private final AssessmentGradeRepository assessmentGradeRepository;
     private final AssessmentRepository assessmentRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final GroupRepository groupRepository;
     private final CoursePermissionService coursePermissionService;
     private final CurrentUserService currentUserService;
     private final CourseUserCacheService courseUserCacheService;
@@ -46,6 +53,7 @@ public class AssessmentGradeService {
         AssessmentGradeRepository assessmentGradeRepository,
         AssessmentRepository assessmentRepository,
         EnrollmentRepository enrollmentRepository,
+        GroupRepository groupRepository,
         CoursePermissionService coursePermissionService,
         CurrentUserService currentUserService,
         CourseUserCacheService courseUserCacheService
@@ -53,6 +61,7 @@ public class AssessmentGradeService {
         this.assessmentGradeRepository = assessmentGradeRepository;
         this.assessmentRepository = assessmentRepository;
         this.enrollmentRepository = enrollmentRepository;
+        this.groupRepository = groupRepository;
         this.coursePermissionService = coursePermissionService;
         this.currentUserService = currentUserService;
         this.courseUserCacheService = courseUserCacheService;
@@ -71,6 +80,35 @@ public class AssessmentGradeService {
         return grades.stream()
             .map(grade -> AssessmentGradeMapper.toResponse(grade, usersById.get(grade.getUserId())))
             .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public GroupGradebookResponse getGradebookByGroupId(Long groupId) {
+        Group group = groupRepository.findByIdAndDeletedAtIsNull(groupId)
+            .orElseThrow(() -> new NotFoundException("Group not found"));
+
+        List<Enrollment> learners = enrollmentRepository
+            .findByGroupIdAndRoleAndDeletedAtIsNull(groupId, CourseRoleEnum.LEARNER);
+        Map<Long, UserLookupResponse> usersById = lookupUsersById(
+            learners.stream().map(Enrollment::getUserId).toList()
+        );
+        List<GroupMemberResponse> members = learners.stream()
+            .map(enrollment -> toMemberResponse(enrollment, usersById.get(enrollment.getUserId())))
+            .toList();
+
+        List<Assessment> assessments = assessmentRepository.findActiveByGroupIdOrderByDueAt(groupId);
+        List<AssessmentGrade> grades = assessmentGradeRepository.findActiveByGroupId(groupId);
+
+        return new GroupGradebookResponse(
+            GroupMapper.toResponse(group, group.getSubject()),
+            members,
+            assessments.stream()
+                .map(AssessmentMapper::toResponse)
+                .toList(),
+            grades.stream()
+                .map(grade -> AssessmentGradeMapper.toResponse(grade, usersById.get(grade.getUserId())))
+                .toList()
+        );
     }
 
     public List<AssessmentGradeResponse> upsertBatch(Long assessmentId, AssessmentGradeBatchRequest request) {
@@ -164,5 +202,17 @@ public class AssessmentGradeService {
 
     private Map<Long, UserLookupResponse> lookupUsersById(List<Long> userIds) {
         return courseUserCacheService.lookupByIds(userIds);
+    }
+
+    private GroupMemberResponse toMemberResponse(Enrollment enrollment, UserLookupResponse user) {
+        UserLookupResponse resolvedUser = user == null
+            ? new UserLookupResponse(enrollment.getUserId(), null, null, null)
+            : user;
+
+        return new GroupMemberResponse(
+            enrollment.getId(),
+            resolvedUser,
+            enrollment.getRole().getDisplayName()
+        );
     }
 }

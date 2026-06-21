@@ -222,6 +222,13 @@ export type GroupDetail = {
 	members: GroupMember[];
 };
 
+export type GroupGradebook = {
+	group: Group;
+	members: GroupMember[];
+	assessments: Assessment[];
+	grades: AssessmentGrade[];
+};
+
 export type GroupCompleteResult = {
 	subjectId: number;
 	academicYear: string;

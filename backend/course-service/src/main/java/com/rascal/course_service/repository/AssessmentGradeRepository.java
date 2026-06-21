@@ -43,4 +43,13 @@ public interface AssessmentGradeRepository extends JpaRepository<AssessmentGrade
         @Param("userIds") Collection<Long> userIds
     );
 
+    @Query("""
+        select g
+        from AssessmentGrade g
+        where g.assessment.group.id = :groupId
+            and g.assessment.deletedAt is null
+    """)
+    @EntityGraph(attributePaths = {"assessment", "assessment.group"})
+    List<AssessmentGrade> findActiveByGroupId(@Param("groupId") Long groupId);
+
 }
