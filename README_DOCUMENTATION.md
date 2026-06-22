@@ -10,6 +10,9 @@ File ini menjadi pintu masuk untuk membaca dokumentasi project.
 | `SUMMARY.md` | Ringkasan cepat untuk memahami sistem |
 | `CODEBASE_OVERVIEW.md` | Referensi teknis per service, endpoint, dan integrasi |
 | `ARCHITECTURE.md` | Diagram arsitektur dan flow data |
+| `NGINX_GUIDE.md` | Panduan Nginx, cloudflared, dan script dev |
+| `NGINX_QUICK_REFERENCE.md` | Referensi cepat Nginx dan command script |
+| `DOCUMENTATION_INDEX.md` | Indeks dokumentasi lengkap |
 
 ## Rekomendasi Baca
 
@@ -40,7 +43,15 @@ Kalau mau mengerjakan deployment/infrastruktur:
 2. cek `global/public-config.yml`;
 3. cek `api-gateway/docker-compose.yml`;
 4. cek `api-gateway/kong/kong.yml`;
-5. pastikan port, host, Redis key, dan route tidak drift.
+5. cek `reverse-proxy/nginx.dev.conf` dan `reverse-proxy/nginx.static.conf`;
+6. pastikan port, host, Redis key, route, dan tunnel tidak drift.
+
+Kalau mau menjalankan project di Linux:
+
+1. pakai `./.assets/scripts/toggle.sh up all`;
+2. buka `http://localhost:9000`;
+3. cek status dengan `./.assets/scripts/toggle.sh status`;
+4. cek log dengan `./.assets/scripts/toggle.sh logs <target>`.
 
 ## Struktur Proyek
 
@@ -82,9 +93,10 @@ Yang perlu dicek saat mengubah konfigurasi:
 - upstream URL di `api-gateway/kong/kong.yml`;
 - Redis config di plugin Kong;
 - body size dan mode network di `api-gateway/docker-compose.yml`;
+- route dan rate limit Nginx di `reverse-proxy/nginx.dev.conf` atau `reverse-proxy/nginx.static.conf`;
 - env frontend bila base URL gateway diatur dari env.
 
-Sasaran idealnya: Docker Compose, Kong, backend, dan frontend mengambil nilai dari sumber env/config yang sama.
+Sasaran idealnya: Docker Compose, Kong, Nginx, backend, dan frontend mengambil nilai dari sumber env/config yang sama. Cloudflared diarahkan ke `localhost:9000`, jadi perubahan port Nginx juga harus sinkron dengan config tunnel lokal.
 
 ## Pertanyaan Umum
 

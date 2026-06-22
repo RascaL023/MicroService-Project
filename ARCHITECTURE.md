@@ -4,8 +4,13 @@
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│                     Frontend SvelteKit                       │
-│  Login, aktivasi, reset password, portal user, portal admin  │
+│              Browser lokal / Cloudflared testing             │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               v
+┌──────────────────────────────────────────────────────────────┐
+│                         Nginx :9000                          │
+│  /api/* -> Kong :8000, route lain -> Vite :5173/build        │
 └──────────────────────────────┬───────────────────────────────┘
                                │
                                │ HTTP REST
@@ -107,7 +112,7 @@ Instruktur buka group
 
 ## Catatan SSOT
 
-SSOT konfigurasi belum sempurna karena Docker dan Kong masih membawa konfigurasi sendiri.
+SSOT konfigurasi belum sempurna karena Docker, Kong, dan Nginx masih membawa konfigurasi sendiri.
 
 ```text
 global/public-config.yml
@@ -118,6 +123,9 @@ api-gateway/docker-compose.yml
 
 api-gateway/kong/kong.yml
   -> punya route, upstream service URL, Redis host/port plugin
+
+reverse-proxy/nginx.dev.conf / nginx.static.conf
+  -> punya port :9000, route /api/*, rate limit, dan target frontend
 ```
 
-Risiko utamanya adalah konfigurasi drift. Contohnya, port service bisa benar di global config, tapi Kong masih menunjuk ke port lama. Saat ada perubahan port, Redis prefix, atau route, cek tiga tempat itu sekaligus.
+Risiko utamanya adalah konfigurasi drift. Contohnya, port service bisa benar di global config, tapi Kong masih menunjuk ke port lama, atau cloudflared masih mengarah ke port Nginx lama. Saat ada perubahan port, Redis prefix, atau route, cek file-file itu sekaligus.

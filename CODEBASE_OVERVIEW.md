@@ -216,6 +216,8 @@ Lokasi: `frontend`
 
 Frontend memakai SvelteKit dan TypeScript.
 
+Pada development Linux, entry point paling nyaman adalah Nginx di `http://localhost:9000` yang dijalankan lewat `./.assets/scripts/toggle.sh up all`. Nginx meneruskan `/api/*` ke Kong dan route lain ke Vite dev server atau static build.
+
 Route utama:
 
 ```text
@@ -335,7 +337,7 @@ Catatan: notification-service tidak punya tabel relasional; file SQL-nya hanya m
 
 ## 6. SSOT Konfigurasi
 
-Konfigurasi utama aplikasi ada di `global/public-config.yml` dan `global/private-config.yml`. Namun SSOT belum sempurna karena Docker/Kong masih punya konfigurasi sendiri.
+Konfigurasi utama aplikasi ada di `global/public-config.yml` dan `global/private-config.yml`. Namun SSOT belum sempurna karena Docker/Kong/Nginx masih punya konfigurasi sendiri.
 
 Bagian yang perlu dicek saat mengubah config:
 
@@ -345,12 +347,15 @@ Bagian yang perlu dicek saat mengubah config:
 | `global/private-config.yml` | secret/password lokal |
 | `api-gateway/docker-compose.yml` | container Kong/Redis, env Kong, body size, network |
 | `api-gateway/kong/kong.yml` | route, upstream URL, Redis config plugin |
+| `reverse-proxy/nginx.dev.conf` | Nginx dev: `/api/*` ke Kong, frontend ke Vite |
+| `reverse-proxy/nginx.static.conf` | Nginx static: `/api/*` ke Kong, frontend ke `frontend/build` |
 
 Konsekuensi:
 
 - ganti port service harus cek global config dan Kong;
 - ganti Redis prefix harus cek app dan plugin Kong;
-- ganti route API harus cek frontend dan Kong;
+- ganti route API harus cek frontend, Kong, dan Nginx;
+- ganti port Nginx harus cek cloudflared lokal;
 - compose belum otomatis menjadi representasi penuh dari global config.
 
 ## 7. Catatan Kualitas
@@ -361,4 +366,4 @@ Hal yang perlu dijaga:
 - event lintas service harus idempotent;
 - query dashboard harus hemat call;
 - audit log domain-level cukup untuk aksi penting, bukan semua request;
-- Docker/Kong config perlu dirapikan kalau project mulai masuk deployment serius.
+- Docker/Kong/Nginx config perlu dirapikan kalau project mulai masuk deployment serius.

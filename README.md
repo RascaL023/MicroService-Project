@@ -1,6 +1,6 @@
 # Sistem Informasi Divisi Pendidikan - Panduan Utama
 
-Proyek ini adalah sistem manajemen pembelajaran berbasis microservices. Stack utamanya terdiri dari Go, Java Spring Boot, SvelteKit, PostgreSQL, Redis, dan Kong API Gateway.
+Proyek ini adalah sistem manajemen pembelajaran berbasis microservices. Stack utamanya terdiri dari Go, Java Spring Boot, SvelteKit, PostgreSQL, Redis, Kong API Gateway, dan Nginx reverse proxy untuk development/testing.
 
 Fokus sistem ini adalah pengelolaan user, role, jurusan, batch, group belajar, enrollment, jadwal, materi, assessment, nilai, laporan, notifikasi email, dan audit log.
 
@@ -10,16 +10,17 @@ Fokus sistem ini adalah pengelolaan user, role, jurusan, batch, group belajar, e
 - [Stack Teknologi](#stack-teknologi)
 - [Arsitektur Sistem](#arsitektur-sistem)
 - [SSOT Konfigurasi](#ssot-konfigurasi)
+- [Reverse Proxy Nginx](#reverse-proxy-nginx)
+- [Script Development](#script-development)
 - [Mulai Cepat](#mulai-cepat)
 - [Struktur Proyek](#struktur-proyek)
 - [Backend Services](#backend-services)
 - [Frontend](#frontend)
 - [Dokumentasi SQL](#dokumentasi-sql)
-- [Catatan Pengembangan](#catatan-pengembangan)
 
 ## Ringkasan Proyek
 
-Sistem ini dibagi menjadi beberapa service dengan tanggung jawab yang jelas:
+Sistem ini dibagi menjadi beberapa service:
 
 | Service | Tanggung Jawab |
 |---|---|
@@ -29,15 +30,16 @@ Sistem ini dibagi menjadi beberapa service dengan tanggung jawab yang jelas:
 | `notification-service` | Konsumsi job email dari Redis Stream dan kirim email via SMTP |
 | `frontend` | UI SvelteKit untuk portal pengguna dan portal pengelola |
 | `api-gateway` | Kong gateway, routing API, plugin session injector |
+| `reverse-proxy` | Nginx entry point lokal di `:9000` |
 
 Pola utamanya:
 
-- komunikasi sync lewat REST API;
-- komunikasi async lewat Redis Streams;
+- REST untuk request langsung;
+- Redis Streams untuk event async;
 - session disimpan di Redis;
-- hak akses menggunakan role dan authority;
-- Java service menerima konteks user dari Kong plugin lewat header;
-- data user di `course-service` disalin ke `course_user_cache` untuk mengurangi call ke `user-service`.
+- Kong membaca session lewat plugin dan inject konteks user ke backend;
+- backend tetap melakukan validasi authority;
+- `course-service` memakai `course_user_cache` agar lookup user lebih hemat.
 
 ## Stack Teknologi
 
@@ -49,6 +51,8 @@ Pola utamanya:
 | Database | PostgreSQL |
 | Cache/Event | Redis, Redis Streams |
 | Gateway | Kong |
+| Reverse proxy | Nginx |
+| Tunnel testing | Cloudflared |
 | Email | Spring Mail, SMTP |
 
 Custom library Java:
@@ -59,30 +63,22 @@ Custom library Java:
 ## Arsitektur Sistem
 
 ```text
-Frontend SvelteKit
+Browser / Cloudflared
        |
-       | HTTP REST
        v
-Kong API Gateway
+Nginx :9000
        |
-       | route + session injector
-       v
-Auth-Service      User-Service      Course-Service
-   |                   |                  |
-   |                   |                  |
-PostgreSQL        PostgreSQL         PostgreSQL
-   |                   |                  |
-   +-------------------+------------------+
-                       |
-                     Redis
-             session, stream, token
-                       |
-                       v
-             Notification-Service
-                  SMTP Email
+       +-- /api/* -> Kong :8000 -> backend services
+       |
+       +-- /*     -> Vite :5173 atau frontend/build
+
+Backend services
+       |
+       +-- PostgreSQL
+       +-- Redis session/stream/token
 ```
 
-Contoh alur login:
+Alur login:
 
 ```text
 User login dari frontend
@@ -91,145 +87,165 @@ User login dari frontend
 -> frontend simpan session di localStorage
 -> request berikutnya membawa Authorization: Session {sessionId}
 -> Kong plugin baca session dari Redis
--> Kong inject header user/role/authority ke backend service
--> backend tetap validasi authority dengan @PreAuthorize atau logic sejenis
-```
-
-Contoh alur event user:
-
-```text
-user-service update user
--> publish event ke Redis Stream user:events
--> course-service update course_user_cache
--> auth-service bisa merespons event tertentu seperti delete/status change
+-> Kong inject header user/role/authority ke backend
+-> backend validasi authority
 ```
 
 ## SSOT Konfigurasi
 
-SSOT konfigurasi project ini belum sepenuhnya bersih.
+SSOT konfigurasi belum sepenuhnya bersih.
 
-Secara konsep, `global/public-config.yml` dan `global/private-config.yml` menjadi sumber konfigurasi utama untuk service. Masalahnya, beberapa bagian infrastruktur Docker masih punya konfigurasi sendiri yang hardcoded.
-
-Contoh sumber konfigurasi yang masih terpisah:
+Secara konsep, `global/public-config.yml` dan `global/private-config.yml` menjadi sumber konfigurasi utama aplikasi. Namun Docker/Kong/Nginx masih punya konfigurasi sendiri.
 
 | Lokasi | Isi |
 |---|---|
 | `global/public-config.yml` | port service, nama database, Redis, stream name, URL aktivasi/reset |
 | `global/private-config.yml` | secret/password lokal |
-| `api-gateway/docker-compose.yml` | container Kong/Redis, env Kong, body size, volume, network mode |
-| `api-gateway/kong/kong.yml` | route Kong, upstream service URL, Redis host/port untuk plugin |
-| `frontend/.env*` | base URL frontend ke gateway jika dipakai |
+| `api-gateway/docker-compose.yml` | container Kong/Redis, env Kong, volume, network mode |
+| `api-gateway/kong/kong.yml` | route Kong, upstream service URL, Redis plugin config |
+| `reverse-proxy/nginx.*.conf` | port Nginx, route `/api/*`, rate limit, static/dev frontend |
+| `frontend/.env*` | base URL frontend jika dipakai |
 
 Dampaknya:
 
-- port atau host bisa drift antara global config dan `kong.yml`;
-- Redis key/prefix bisa beda antara app config dan plugin Kong;
-- Docker Compose belum otomatis membaca semua nilai dari global config;
-- perubahan konfigurasi perlu dicek di lebih dari satu tempat.
+- port bisa drift antara global config, Kong, dan Nginx;
+- Redis prefix bisa beda antara aplikasi dan plugin Kong;
+- Docker Compose belum otomatis membaca semua nilai global config;
+- perubahan route perlu dicek di frontend, Kong, dan Nginx.
 
-Untuk sekarang ini masih wajar untuk project lokal, tapi belum ideal sebagai SSOT. Sasaran yang lebih rapi:
+Untuk deployment yang lebih serius, target idealnya adalah satu sumber env/config yang dipakai backend, Docker Compose, Kong, Nginx, dan frontend. Namun karena gak seserius itu juga, jadinya ya gitu...
 
-- semua nilai utama ada di `.env` atau global config;
-- Docker Compose mengambil nilai dari env yang sama;
-- Kong declarative config dibuat dari template atau env-substitution;
-- dokumentasi menjalankan service menyebut jelas konfigurasi mana yang authoritative.
+## Reverse Proxy Nginx
 
-## Mulai Cepat
+Nginx dipakai sebagai entry point lokal di `http://localhost:9000`.
 
-### Prasyarat
-
-Pastikan sudah ada:
-
-- Java 21+
-- Go sesuai versi `go.mod`
-- Node.js dan npm
-- PostgreSQL
-- Redis
-- Docker dan Docker Compose untuk menjalankan Kong/Redis via container
-- Maven
-
-### Database
-
-Script SQL tersedia di folder `.assets` masing-masing service:
+Alurnya:
 
 ```text
-backend/auth-service/.assets/auth-service-ddl.sql
-backend/auth-service/.assets/auth-service-dml.sql
-backend/user-service/.assets/user-service-ddl.sql
-backend/user-service/.assets/user-service-dml.sql
-backend/course-service/.assets/course-service-ddl.sql
-backend/course-service/.assets/course-service-dml.sql
-backend/notification-service/.assets/notification-service-ddl.sql
-backend/notification-service/.assets/notification-service-dml.sql
+localhost:9000/api/* -> Kong localhost:8000
+localhost:9000/*     -> Vite localhost:5173 pada mode dev
+localhost:9000/*     -> frontend/build pada mode static
 ```
 
-Database default dari konfigurasi saat ini:
+File:
 
 ```text
-mcr_auth
-mcr_user
-mcr_course
+reverse-proxy/nginx.dev.conf
+reverse-proxy/nginx.static.conf
+reverse-proxy/mime.types
 ```
 
-### Build Custom Library
+Konfigurasi penting:
 
-Java service memakai library lokal. Install dulu ke Maven local repository:
+```nginx
+listen 9000;
+client_max_body_size 10m;
+limit_req_status 429;
+limit_req_zone $binary_remote_addr zone=api_per_ip:10m rate=10r/s;
+```
+
+Rate limit aktif hanya pada `/api/*`:
+
+```nginx
+location /api/ {
+    limit_req zone=api_per_ip burst=20 nodelay;
+    proxy_pass http://127.0.0.1:8000;
+}
+```
+
+Cloudflared diarahkan ke Nginx, bukan langsung ke Kong atau frontend:
+
+```yaml
+ingress:
+  - hostname: dev.rascal.my.id
+    service: http://localhost:9000
+  - service: http_status:404
+```
+
+Catatan: setup cloudflared ini untuk testing online saja, bukan pola produksi final.
+
+## Script Development
+
+Untuk Linux, cara paling enak menjalankan project adalah lewat script:
 
 ```bash
-cd "global/custom library/SecurityFilter"
-mvn clean install -DskipTests
+./.assets/scripts/toggle.sh up all
 ```
+
+Script ini mengatur:
+
+- Kong + Redis dari `api-gateway/docker-compose.yml`;
+- auth-service;
+- user-service;
+- course-service;
+- notification-service;
+- frontend dev server;
+- Nginx reverse proxy.
+
+Perintah umum:
 
 ```bash
-cd "global/custom library/ApiResponseKit"
-mvn clean install -DskipTests
+./.assets/scripts/toggle.sh status
+./.assets/scripts/toggle.sh logs proxy
+./.assets/scripts/toggle.sh logs compose
+./.assets/scripts/toggle.sh restart proxy
+./.assets/scripts/toggle.sh down all
 ```
 
-### Jalankan Gateway dan Redis
+Mode default adalah `DEV_TOGGLE_PROXY_MODE=dev`, sehingga Nginx meneruskan frontend ke Vite `:5173`.
 
-```bash
-cd api-gateway
-docker compose up -d
-```
-
-Catatan: compose di folder ini fokus ke Kong dan Redis. Backend service tetap perlu dijalankan manual atau lewat mekanisme lain.
-
-### Jalankan Backend Service
-
-Auth service:
-
-```bash
-cd backend/auth-service
-go run cmd/server/main.go
-```
-
-User service:
-
-```bash
-cd backend/user-service
-./mvnw spring-boot:run
-```
-
-Course service:
-
-```bash
-cd backend/course-service
-./mvnw spring-boot:run
-```
-
-Notification service:
-
-```bash
-cd backend/notification-service
-./mvnw spring-boot:run
-```
-
-### Jalankan Frontend
+Untuk mode static:
 
 ```bash
 cd frontend
-npm install
-npm run dev
+npm run build
+
+cd ..
+DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
+```
+
+Pada mode static, script tidak menyalakan frontend dev server karena Nginx langsung melayani `frontend/build`.
+
+## Mulai Cepat
+
+Prasyarat:
+
+- Java 21+
+- Go sesuai `go.mod`
+- Node.js dan npm
+- PostgreSQL
+- Docker dan Docker Compose
+- Nginx
+- Maven atau Maven wrapper
+
+Jalankan semua untuk development Linux:
+
+```bash
+./.assets/scripts/toggle.sh up all
+```
+
+Akses:
+
+```text
+http://localhost:9000
+```
+
+Melihat status:
+
+```bash
+./.assets/scripts/toggle.sh status
+```
+
+Stop semua:
+
+```bash
+./.assets/scripts/toggle.sh down all
+```
+
+Jika ingin expose lewat cloudflared:
+
+```bash
+cloudflared tunnel run lms-dev
 ```
 
 ## Struktur Proyek
@@ -243,15 +259,17 @@ npm run dev
 │   └── notification-service/
 ├── frontend/
 ├── api-gateway/
+├── reverse-proxy/
 ├── global/
-│   ├── custom library/
-│   ├── public-config.yml
-│   └── private-config.yml
+├── .assets/scripts/
 ├── README.md
 ├── SUMMARY.md
 ├── CODEBASE_OVERVIEW.md
 ├── ARCHITECTURE.md
-└── README_DOCUMENTATION.md
+├── README_DOCUMENTATION.md
+├── DOCUMENTATION_INDEX.md
+├── NGINX_GUIDE.md
+└── NGINX_QUICK_REFERENCE.md
 ```
 
 ## Backend Services
@@ -269,21 +287,6 @@ Fungsi utama:
 - session Redis;
 - publish job email ke Redis Stream.
 
-Endpoint utama:
-
-```text
-POST   /api/auths/login
-POST   /api/auths/logout
-POST   /api/auths/activations/request
-POST   /api/auths/activations/complete
-POST   /api/auths/passwords/forgot
-POST   /api/auths/passwords/reset
-GET    /api/auths/users
-PATCH  /api/auths/users/{id}/status
-PATCH  /api/auths/users/{id}/role
-DELETE /api/auths/users/{id}/role
-```
-
 ### User-Service
 
 Fungsi utama:
@@ -295,20 +298,6 @@ Fungsi utama:
 - download template import;
 - publish user event;
 - status user: `ACTIVE`, `GRADUATED`, `DROP_OUT`.
-
-Endpoint utama:
-
-```text
-GET    /api/users
-GET    /api/users/{id}
-POST   /api/users
-PATCH  /api/users/{id}
-DELETE /api/users/{id}
-POST   /api/users/import
-GET    /api/users/import-template
-GET    /api/batches
-GET    /api/majors
-```
 
 ### Course-Service
 
@@ -325,19 +314,6 @@ Fungsi utama:
 - laporan nilai mingguan;
 - audit log;
 - cache user dari event user-service.
-
-Endpoint utama:
-
-```text
-GET    /api/subjects
-GET    /api/groups
-GET    /api/enrollments
-GET    /api/group-schedules
-GET    /api/schedule-templates
-GET    /api/assessments
-GET    /api/audit-logs
-GET    /api/reports/weekly-grades
-```
 
 ### Notification-Service
 
@@ -359,12 +335,6 @@ Frontend memakai SvelteKit dengan dua portal:
 
 Session disimpan di `localStorage`. UI melakukan validasi tampilan berdasarkan authority dari session lokal. Ini hanya untuk UX. Validasi final tetap di backend.
 
-Contoh:
-
-- user dengan `group.read` bisa melihat group;
-- user dengan `group.update` atau `group.*` bisa melihat tombol edit;
-- user dengan `group.delete` atau `group.*` bisa melihat tombol hapus.
-
 ## Dokumentasi SQL
 
 Format SQL sudah dipisah:
@@ -372,27 +342,14 @@ Format SQL sudah dipisah:
 - `*-ddl.sql`: schema, tabel, index, constraint;
 - `*-dml.sql`: seed awal.
 
-Catatan:
+Lokasi:
 
-- DDL dibuat berdasarkan entity saat ini.
-- DML dibuat untuk local development.
-- Jika database lokal sudah lama berjalan dengan `ddl-auto=update`, tetap ada kemungkinan drift dengan file SQL.
-
-## Catatan Pengembangan
-
-Untuk perubahan backend:
-
-- ikuti pola controller -> service -> repository;
-- validasi authority di backend tetap wajib;
-- jangan mengandalkan hide tombol frontend sebagai security;
-- event antar service pakai Redis Streams.
-
-Untuk perubahan frontend:
-
-- gunakan helper API yang sudah ada;
-- pakai authority dari session untuk render menu/tombol;
-- akses API tetap siap menerima 401/403;
-- pertahankan UX portal yang padat, rapi, dan fokus operasional.
+```text
+backend/auth-service/.assets/
+backend/user-service/.assets/
+backend/course-service/.assets/
+backend/notification-service/.assets/
+```
 
 ## Dokumen Lain
 
@@ -400,3 +357,6 @@ Untuk perubahan frontend:
 - [CODEBASE_OVERVIEW.md](./CODEBASE_OVERVIEW.md): referensi teknis.
 - [ARCHITECTURE.md](./ARCHITECTURE.md): diagram arsitektur dan flow.
 - [README_DOCUMENTATION.md](./README_DOCUMENTATION.md): indeks dokumentasi.
+- [DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md): indeks dokumentasi lengkap.
+- [NGINX_GUIDE.md](./NGINX_GUIDE.md): panduan Nginx dan cloudflared.
+- [NGINX_QUICK_REFERENCE.md](./NGINX_QUICK_REFERENCE.md): referensi cepat Nginx.

@@ -12,6 +12,7 @@
 | Database | PostgreSQL |
 | Cache/Event | Redis dan Redis Streams |
 | Auth utama | Session Redis dengan RBAC |
+| Entry point lokal | Nginx `http://localhost:9000` |
 
 ## Service Utama
 
@@ -187,16 +188,19 @@ Admin/instruktur pilih group dan user
 
 ## SSOT Konfigurasi
 
-SSOT belum sempurna karena sebagian konfigurasi masih hidup di Docker/Kong.
+SSOT belum sempurna karena sebagian konfigurasi masih hidup di Docker/Kong/Nginx.
 
 Sumber konfigurasi saat ini:
 
 - `global/public-config.yml` dan `global/private-config.yml`;
 - `api-gateway/docker-compose.yml`;
 - `api-gateway/kong/kong.yml`;
+- `reverse-proxy/nginx.dev.conf` dan `reverse-proxy/nginx.static.conf`;
 - env frontend jika dipakai.
 
 Risikonya: port, Redis key, route, dan URL service bisa beda antar file. Untuk local development masih bisa diterima, tapi untuk deployment yang lebih serius sebaiknya semua nilai utama ditarik dari satu sumber env/config yang sama.
+
+Cloudflared untuk testing online diarahkan ke `http://localhost:9000`, sehingga Nginx menjadi entry point sebelum request masuk ke Kong atau frontend.
 
 ## Keamanan
 
@@ -212,35 +216,18 @@ Poin utama:
 ## Mulai Cepat
 
 ```bash
-cd api-gateway
-docker compose up -d
+./.assets/scripts/toggle.sh up all
 ```
 
 ```bash
-cd backend/auth-service
-go run cmd/server/main.go
+./.assets/scripts/toggle.sh status
 ```
 
 ```bash
-cd backend/user-service
-./mvnw spring-boot:run
+./.assets/scripts/toggle.sh down all
 ```
 
-```bash
-cd backend/course-service
-./mvnw spring-boot:run
-```
-
-```bash
-cd backend/notification-service
-./mvnw spring-boot:run
-```
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
+Akses aplikasi dari `http://localhost:9000`. Untuk testing online, jalankan `cloudflared tunnel run lms-dev` setelah stack lokal hidup.
 
 ## Dokumen Terkait
 
