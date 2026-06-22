@@ -37,8 +37,19 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (response.UserRespo
 	return mapper.ToUserResponse(user), nil
 }
 
-func (s *UserService) List(ctx context.Context, page, size int) ([]response.UserResponse, int, error) {
-	users, total, err := s.userRepo.List(ctx, size, (page-1)*size)
+func (s *UserService) List(ctx context.Context, page, size int, email, status string) ([]response.UserResponse, int, error) {
+	normalizedStatus, err := normalizeSearchStatus(status)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	users, total, err := s.userRepo.List(
+		ctx,
+		size,
+		(page-1)*size,
+		strings.ToLower(strings.TrimSpace(email)),
+		normalizedStatus,
+	)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -49,6 +60,23 @@ func (s *UserService) List(ctx context.Context, page, size int) ([]response.User
 	}
 
 	return responses, total, nil
+}
+
+func normalizeSearchStatus(status string) (string, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(status))
+	if normalized == "" {
+		return "", nil
+	}
+	if normalized != repository.AccountActive &&
+		normalized != repository.AccountBanned &&
+		normalized != repository.AccountPendingActivation {
+		return "", NewValidationError(FieldError{
+			Field:   "status",
+			Message: "Status is invalid",
+		})
+	}
+
+	return normalized, nil
 }
 
 func (s *UserService) DashboardSummary(ctx context.Context) (response.DashboardSummaryResponse, error) {

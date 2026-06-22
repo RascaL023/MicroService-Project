@@ -46,6 +46,7 @@ public class GroupService {
     private final CourseUserCacheService courseUserCacheService;
     private final GroupMeetingService groupMeetingService;
     private final AssessmentService assessmentService;
+    private final AuditLogService auditLogService;
 
     public GroupService(
         GroupRepository groupRepository,
@@ -54,7 +55,8 @@ public class GroupService {
         EnrollmentRepository enrollmentRepository,
         CourseUserCacheService courseUserCacheService,
         GroupMeetingService groupMeetingService,
-        AssessmentService assessmentService
+        AssessmentService assessmentService,
+        AuditLogService auditLogService
     ) {
         this.groupRepository = groupRepository;
         this.subjectRepository = subjectRepository;
@@ -63,6 +65,7 @@ public class GroupService {
         this.courseUserCacheService = courseUserCacheService;
         this.groupMeetingService = groupMeetingService;
         this.assessmentService = assessmentService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -135,7 +138,20 @@ public class GroupService {
             name, academicYear, subject
         ); group.setCreatedAt(LocalDateTime.now());
 
-        return groupRepository.save(group);
+        Group saved = groupRepository.save(group);
+        auditLogService.log(
+            "GROUP_CREATED",
+            "GROUP",
+            saved.getId(),
+            "Created group " + saved.getName(),
+            Map.of(
+                "name", saved.getName(),
+                "subjectId", subject.getId(),
+                "academicYear", saved.getAcademicYear()
+            )
+        );
+
+        return saved;
     }
 
 
@@ -161,7 +177,21 @@ public class GroupService {
         GroupMapper.toEntity(group, status, name, academicYear, subject);
         group.setUpdatedAt(LocalDateTime.now());
 
-        return groupRepository.save(group);
+        Group saved = groupRepository.save(group);
+        auditLogService.log(
+            "GROUP_UPDATED",
+            "GROUP",
+            saved.getId(),
+            "Updated group " + saved.getName(),
+            Map.of(
+                "name", saved.getName(),
+                "subjectId", saved.getSubject().getId(),
+                "academicYear", saved.getAcademicYear(),
+                "status", saved.getStatus().name()
+            )
+        );
+
+        return saved;
     }
 
 
@@ -170,6 +200,17 @@ public class GroupService {
         group.setDeletedAt(LocalDateTime.now());
 
         groupRepository.save(group);
+        auditLogService.log(
+            "GROUP_DELETED",
+            "GROUP",
+            group.getId(),
+            "Deleted group " + group.getName(),
+            Map.of(
+                "name", group.getName(),
+                "subjectId", group.getSubject().getId(),
+                "academicYear", group.getAcademicYear()
+            )
+        );
     }
 
 
@@ -187,6 +228,19 @@ public class GroupService {
 
         int deletedSchedules = groupScheduleRepository.deleteByGroupIdIn(groupIds);
         int completedGroups = groupRepository.markPassedByIds(groupIds, now);
+        auditLogService.log(
+            "GROUPS_COMPLETED",
+            "GROUP",
+            subject.getId() + ":" + academicYear,
+            "Completed groups by subject and academic year",
+            Map.of(
+                "subjectId", subject.getId(),
+                "academicYear", academicYear,
+                "completedGroups", completedGroups,
+                "deletedSchedules", deletedSchedules,
+                "groupIds", groupIds
+            )
+        );
 
         return new GroupCompleteResponse(
             subject.getId(),

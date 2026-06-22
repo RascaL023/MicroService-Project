@@ -55,6 +55,7 @@ public class AssessmentService {
     private final GroupMeetingRepository groupMeetingRepository;
     private final CoursePermissionService coursePermissionService;
     private final CurrentUserService currentUserService;
+    private final AuditLogService auditLogService;
     private final FileStorageService fileStorageService;
     private final FileStorageService.FileRule fileRule;
 
@@ -66,6 +67,7 @@ public class AssessmentService {
         GroupMeetingRepository groupMeetingRepository,
         CoursePermissionService coursePermissionService,
         CurrentUserService currentUserService,
+        AuditLogService auditLogService,
         FileStorageService fileStorageService
     ) {
         this.assessmentRepository = assessmentRepository;
@@ -75,6 +77,7 @@ public class AssessmentService {
         this.groupMeetingRepository = groupMeetingRepository;
         this.coursePermissionService = coursePermissionService;
         this.currentUserService = currentUserService;
+        this.auditLogService = auditLogService;
         this.fileStorageService = fileStorageService;
         this.fileRule = new FileStorageService.FileRule(
             false,
@@ -166,7 +169,21 @@ public class AssessmentService {
                 fileRule
             ));
 
-        return AssessmentMapper.toResponse(assessmentRepository.save(assessment));
+        Assessment saved = assessmentRepository.save(assessment);
+        auditLogService.log(
+            "ASSESSMENT_CREATED",
+            "ASSESSMENT",
+            saved.getId(),
+            "Created assessment " + saved.getTitle(),
+            Map.of(
+                "groupId", saved.getGroup().getId(),
+                "type", saved.getType().name(),
+                "title", saved.getTitle(),
+                "hasFile", saved.getStoredFilename() != null
+            )
+        );
+
+        return AssessmentMapper.toResponse(saved);
     }
 
     public AssessmentResponse updateById(Long id, AssessmentPatchRequest request, MultipartFile file) {
@@ -221,7 +238,21 @@ public class AssessmentService {
 
         assessment.setUpdatedAt(LocalDateTime.now());
 
-        return AssessmentMapper.toResponse(assessmentRepository.save(assessment));
+        Assessment saved = assessmentRepository.save(assessment);
+        auditLogService.log(
+            "ASSESSMENT_UPDATED",
+            "ASSESSMENT",
+            saved.getId(),
+            "Updated assessment " + saved.getTitle(),
+            Map.of(
+                "groupId", saved.getGroup().getId(),
+                "type", saved.getType().name(),
+                "title", saved.getTitle(),
+                "hasFile", saved.getStoredFilename() != null
+            )
+        );
+
+        return AssessmentMapper.toResponse(saved);
     }
 
     public void deleteById(Long id) {
@@ -231,6 +262,17 @@ public class AssessmentService {
 
         assessmentRepository.save(assessment);
         fileStorageService.delete(assessment.getStoredFilename() == null ? null : physicalPath(assessment));
+        auditLogService.log(
+            "ASSESSMENT_DELETED",
+            "ASSESSMENT",
+            assessment.getId(),
+            "Deleted assessment " + assessment.getTitle(),
+            Map.of(
+                "groupId", assessment.getGroup().getId(),
+                "type", assessment.getType().name(),
+                "title", assessment.getTitle()
+            )
+        );
     }
 
     public AssessmentAcknowledgementResponse acknowledge(Long id) {
@@ -264,6 +306,18 @@ public class AssessmentService {
         acknowledgement.setDeletedAt(null);
         acknowledgement.setUpdatedAt(acknowledgement.getId() == null ? null : now);
         assessmentAcknowledgementRepository.save(acknowledgement);
+        auditLogService.log(
+            "ASSESSMENT_ACKNOWLEDGED",
+            "ASSESSMENT",
+            assessment.getId(),
+            "Marked assessment done",
+            Map.of(
+                "groupId", assessment.getGroup().getId(),
+                "assessmentId", assessment.getId(),
+                "userId", userId,
+                "type", assessment.getType().name()
+            )
+        );
 
         return new AssessmentAcknowledgementResponse(
             assessment.getId(),

@@ -1,6 +1,7 @@
 package com.rascal.course_service.service;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,9 +22,14 @@ import id.rascal.response_kit.exception.NotFoundException;
 public class SubjectService {
 
     private final SubjectRepository subjectRepository;
+    private final AuditLogService auditLogService;
 
-    public SubjectService(SubjectRepository subjectRepository) {
+    public SubjectService(
+        SubjectRepository subjectRepository,
+        AuditLogService auditLogService
+    ) {
         this.subjectRepository = subjectRepository;
+        this.auditLogService = auditLogService;
     }
 
 
@@ -43,7 +49,17 @@ public class SubjectService {
         Subject subject = SubjectMapper.toEntity(request);
         subject.setCreatedAt(LocalDateTime.now());
 
-        try { return subjectRepository.saveAndFlush(subject); } 
+        try {
+            Subject saved = subjectRepository.saveAndFlush(subject);
+            auditLogService.log(
+                "SUBJECT_CREATED",
+                "SUBJECT",
+                saved.getId(),
+                "Created subject " + saved.getName(),
+                Map.of("name", saved.getName())
+            );
+            return saved;
+        } 
         catch (DataIntegrityViolationException ex) {
             throw new ConflictException("Subject already exist");
         }
@@ -56,7 +72,17 @@ public class SubjectService {
         Subject subject = getById(id);
         SubjectMapper.updateEntity(subject, request);
 
-        try { return subjectRepository.saveAndFlush(subject); } 
+        try {
+            Subject saved = subjectRepository.saveAndFlush(subject);
+            auditLogService.log(
+                "SUBJECT_UPDATED",
+                "SUBJECT",
+                saved.getId(),
+                "Updated subject " + saved.getName(),
+                Map.of("name", saved.getName())
+            );
+            return saved;
+        } 
         catch (DataIntegrityViolationException ex) {
             throw new ConflictException("Subject already exist");
         }
@@ -68,6 +94,13 @@ public class SubjectService {
         subject.setDeletedAt(LocalDateTime.now());
 
         subjectRepository.save(subject);
+        auditLogService.log(
+            "SUBJECT_DELETED",
+            "SUBJECT",
+            subject.getId(),
+            "Deleted subject " + subject.getName(),
+            Map.of("name", subject.getName())
+        );
     }
 
     private String normalizeSearchName(String name) {

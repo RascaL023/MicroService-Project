@@ -15,6 +15,8 @@
 	let session = $state<LoginData | null>(null);
 	let selectedUser = $state<AuthUser | null>(null);
 	let selectedRole = $state('');
+	let email = $state('');
+	let status = $state('');
 	let showManage = $state(false);
 	let confirmState = $state({ open: false, title: '', message: '', confirmLabel: 'Ya, lanjutkan' });
 	let pendingConfirm: (() => Promise<void>) | null = null;
@@ -38,6 +40,8 @@
 			size: String(pageMeta.size),
 			sort: 'id,desc'
 		});
+		if (email.trim()) query.set('email', email.trim());
+		if (status) query.set('status', status);
 		const payload = await api<PageData<AuthUser> | AuthUser[]>(`/api/auths/users?${query}`);
 		users = pageItems(payload);
 		pageMeta = paginationMeta(payload, pageMeta);
@@ -178,6 +182,17 @@
 		pageMeta = { ...pageMeta, page: 0, size };
 		void load();
 	}
+
+	function applyFilters() {
+		pageMeta = { ...pageMeta, page: 0 };
+		void load();
+	}
+
+	function resetFilters() {
+		email = '';
+		status = '';
+		applyFilters();
+	}
 </script>
 
 <svelte:head><title>Auth - Divdik Course</title></svelte:head>
@@ -187,6 +202,29 @@
 <Notice {error} {success} />
 
 <AccessPanel authorities={['user.read', 'user.*']}>
+	<form class="filter-card" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
+		<label>
+			<span>Email</span>
+			<input bind:value={email} placeholder="Cari email auth..." />
+		</label>
+		<label>
+			<span>Status</span>
+			<select bind:value={status}>
+				<option value="">Semua status</option>
+				<option value="ACTIVE">ACTIVE</option>
+				<option value="PENDING_ACTIVATION">PENDING_ACTIVATION</option>
+				<option value="BANNED">BANNED</option>
+			</select>
+		</label>
+		<div class="filter-actions">
+			<button class="btn btn-secondary" type="submit">
+				<Icons name="search" size={16} />
+				<span>Cari</span>
+			</button>
+			<button class="btn btn-ghost" type="button" onclick={resetFilters}>Reset</button>
+		</div>
+	</form>
+
 	<div class="table-container">
 		<table>
 			<thead>
@@ -357,6 +395,37 @@
 		white-space: nowrap;
 	}
 
+	.filter-card {
+		display: grid;
+		grid-template-columns: minmax(220px, 1fr) minmax(190px, 0.35fr) auto;
+		align-items: end;
+		gap: 0.85rem;
+		margin-bottom: 1rem;
+		padding: 1rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.filter-card label {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.filter-card label span {
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.filter-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+
 	.identity-cell {
 		display: flex;
 		align-items: center;
@@ -484,6 +553,15 @@
 	}
 
 	@media (max-width: 820px) {
+		.filter-card {
+			grid-template-columns: 1fr;
+		}
+
+		.filter-actions {
+			display: grid;
+			grid-template-columns: 1fr;
+		}
+
 		.account-summary,
 		.manage-section {
 			grid-template-columns: 1fr;

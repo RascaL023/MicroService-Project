@@ -33,17 +33,20 @@ public class EnrollmentService {
     private final GroupRepository groupRepository;
     private final CurrentUserService currentUserService;
     private final CourseUserCacheService courseUserCacheService;
+    private final AuditLogService auditLogService;
 
     public EnrollmentService(
         EnrollmentRepository enrollmentRepository,
         GroupRepository groupRepository,
         CurrentUserService currentUserService,
-        CourseUserCacheService courseUserCacheService
+        CourseUserCacheService courseUserCacheService,
+        AuditLogService auditLogService
     ) {
         this.enrollmentRepository = enrollmentRepository;
         this.groupRepository = groupRepository;
         this.currentUserService = currentUserService;
         this.courseUserCacheService = courseUserCacheService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -109,7 +112,20 @@ public class EnrollmentService {
         Enrollment enrollment = EnrollmentMapper.toEntity(request, group);
         enrollment.setCreatedAt(LocalDateTime.now());
 
-        return enrollmentRepository.save(enrollment);
+        Enrollment saved = enrollmentRepository.save(enrollment);
+        auditLogService.log(
+            "ENROLLMENT_CREATED",
+            "ENROLLMENT",
+            saved.getId(),
+            "Created enrollment",
+            Map.of(
+                "userId", saved.getUserId(),
+                "groupId", saved.getGroup().getId(),
+                "role", saved.getRole().name()
+            )
+        );
+
+        return saved;
     }
 
     public EnrollmentResponse createResponse(EnrollmentRequest request) {
@@ -142,7 +158,20 @@ public class EnrollmentService {
             request.groupId() == null ? null : getActiveGroup(request.groupId())
         );
 
-        return enrollmentRepository.save(enrollment);
+        Enrollment saved = enrollmentRepository.save(enrollment);
+        auditLogService.log(
+            "ENROLLMENT_UPDATED",
+            "ENROLLMENT",
+            saved.getId(),
+            "Updated enrollment",
+            Map.of(
+                "userId", saved.getUserId(),
+                "groupId", saved.getGroup().getId(),
+                "role", saved.getRole().name()
+            )
+        );
+
+        return saved;
     }
 
     public EnrollmentResponse patchResponse(Long id, EnrollmentPatchRequest request) {
@@ -154,6 +183,17 @@ public class EnrollmentService {
         enrollment.setDeletedAt(LocalDateTime.now());
 
         enrollmentRepository.save(enrollment);
+        auditLogService.log(
+            "ENROLLMENT_DELETED",
+            "ENROLLMENT",
+            enrollment.getId(),
+            "Deleted enrollment",
+            Map.of(
+                "userId", enrollment.getUserId(),
+                "groupId", enrollment.getGroup().getId(),
+                "role", enrollment.getRole().name()
+            )
+        );
     }
 
     private Group getActiveGroup(Long groupId) {

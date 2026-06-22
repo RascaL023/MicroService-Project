@@ -48,6 +48,7 @@ public class AssessmentGradeService {
     private final CoursePermissionService coursePermissionService;
     private final CurrentUserService currentUserService;
     private final CourseUserCacheService courseUserCacheService;
+    private final AuditLogService auditLogService;
 
     public AssessmentGradeService(
         AssessmentGradeRepository assessmentGradeRepository,
@@ -56,7 +57,8 @@ public class AssessmentGradeService {
         GroupRepository groupRepository,
         CoursePermissionService coursePermissionService,
         CurrentUserService currentUserService,
-        CourseUserCacheService courseUserCacheService
+        CourseUserCacheService courseUserCacheService,
+        AuditLogService auditLogService
     ) {
         this.assessmentGradeRepository = assessmentGradeRepository;
         this.assessmentRepository = assessmentRepository;
@@ -65,6 +67,7 @@ public class AssessmentGradeService {
         this.coursePermissionService = coursePermissionService;
         this.currentUserService = currentUserService;
         this.courseUserCacheService = courseUserCacheService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -162,6 +165,19 @@ public class AssessmentGradeService {
             .toList();
 
         List<AssessmentGrade> saved = assessmentGradeRepository.saveAll(grades);
+        auditLogService.log(
+            "ASSESSMENT_GRADES_UPSERTED",
+            "ASSESSMENT",
+            assessment.getId(),
+            "Upserted assessment grades",
+            Map.of(
+                "assessmentId", assessment.getId(),
+                "groupId", groupId,
+                "gradedBy", graderId,
+                "gradeCount", saved.size(),
+                "userIds", userIds
+            )
+        );
         Map<Long, UserLookupResponse> usersById = lookupUsersById(
             saved.stream().map(AssessmentGrade::getUserId).toList()
         );

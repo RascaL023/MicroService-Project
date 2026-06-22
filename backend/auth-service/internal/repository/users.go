@@ -317,19 +317,27 @@ func (r *UserRepository) DemoteToDefaultRole(ctx context.Context, userID int64) 
 	return r.FindByID(ctx, userID)
 }
 
-func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]entity.User, int, error) {
+func (r *UserRepository) List(ctx context.Context, limit, offset int, email, status string) ([]entity.User, int, error) {
 	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE deleted_at IS NULL`).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM users
+		WHERE deleted_at IS NULL
+			AND ($1 = '' OR lower(email) LIKE '%' || $1 || '%')
+			AND ($2 = '' OR status = $2)
+	`, email, status).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, email, hash_password, status, email_verified_at, last_login, created_at, updated_at, deleted_at
 		FROM users
-	WHERE deleted_at IS NULL
-	ORDER BY id
-	LIMIT $1 OFFSET $2
-	`, limit, offset)
+		WHERE deleted_at IS NULL
+			AND ($1 = '' OR lower(email) LIKE '%' || $1 || '%')
+			AND ($2 = '' OR status = $2)
+		ORDER BY id
+		LIMIT $3 OFFSET $4
+	`, email, status, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}

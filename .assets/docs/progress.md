@@ -3,6 +3,7 @@
         - kong simple log request audit
         - rate limiting on reverse proxy
     - course-service:
+        - logs error fix
         - gradebook better call
         - subject search (FE) [bug]
         - learner ack assessments
@@ -15,8 +16,7 @@
         - laod balancer on api-gateway
 
 # TODO:
-    - auth-service:
-        - search by email, filter by status
+    - better UI & animations
 
 # ??
     - deleted user on group member response mark deleted or just show

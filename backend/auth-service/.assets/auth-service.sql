@@ -67,7 +67,9 @@ INSERT INTO authorities(name) VALUES
 	('subject-material.create'), ('subject-material.read'), ('subject-material.update'), ('subject-material.delete'),
 	('subject-material.*'),
 	('subject-module.create'), ('subject-module.read'), ('subject-module.update'), ('subject-module.delete'),
-	('subject-module.*')
+	('subject-module.*'),
+
+    ('log-access')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO roles(name, created_at) VALUES
@@ -88,7 +90,8 @@ JOIN authorities a ON a.name IN (
     'course.*', 'group.*', 
     'group-schedule.*', 'enrollment.*', 
     'subject.*', 'subject-material.*',
-    'subject-module.*'
+    'subject-module.*',
+    'log-access'
 ) WHERE r.name = 'ADMIN'
 ON CONFLICT DO NOTHING;
 

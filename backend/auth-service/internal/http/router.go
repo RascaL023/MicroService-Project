@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"auth-service/internal/config"
 	"auth-service/internal/dto/request"
@@ -122,7 +123,13 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	page, size := pagination(r)
-	users, total, err := s.userSvc.List(r.Context(), page, size)
+	users, total, err := s.userSvc.List(
+		r.Context(),
+		page,
+		size,
+		strings.TrimSpace(r.URL.Query().Get("email")),
+		strings.TrimSpace(r.URL.Query().Get("status")),
+	)
 	if err != nil {
 		respond(w, http.StatusOK, "Users retrieved successfully", nil, err)
 		return

@@ -113,6 +113,18 @@ export type CourseDashboardReminder = {
 	instructorPendingGrades: number;
 };
 
+export type AuditLog = {
+	id: number;
+	actorUserId?: number | null;
+	service: string;
+	action: string;
+	entityType: string;
+	entityId?: string | null;
+	description?: string | null;
+	metadataJson?: string | null;
+	createdAt: string;
+};
+
 export type Subject = {
 	id: number;
 	name: string;
