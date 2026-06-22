@@ -78,11 +78,8 @@ Mode ini cocok untuk testing build frontend tanpa Vite.
 Jalankan:
 
 ```bash
-cd frontend
-npm run build
-
-cd ..
-DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
+./.assets/scripts/toggle.sh build frontend
+DEV_TOGGLE_RUN_MODE=build DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
 ```
 
 ## Script Dev
@@ -132,6 +129,8 @@ Env yang berguna:
 ```bash
 DEV_TOGGLE_PROXY_MODE=dev
 DEV_TOGGLE_PROXY_MODE=static
+DEV_TOGGLE_RUN_MODE=source
+DEV_TOGGLE_RUN_MODE=build
 DEV_TOGGLE_NGINX_CONF=/path/to/nginx.conf
 DEV_TOGGLE_NGINX_SUDO=0
 DEV_TOGGLE_DOCKER_SUDO=0
@@ -296,9 +295,7 @@ Frontend tidak tampil pada mode dev:
 Frontend tidak tampil pada mode static:
 
 ```bash
-cd frontend
-npm run build
-cd ..
+./.assets/scripts/toggle.sh build frontend
 DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh restart proxy
 ```
 

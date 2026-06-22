@@ -84,11 +84,8 @@ Default proxy mode adalah `dev`, artinya Nginx meneruskan frontend ke Vite `:517
 Untuk mode static:
 
 ```bash
-cd frontend
-npm run build
-
-cd ..
-DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
+./.assets/scripts/toggle.sh build frontend
+DEV_TOGGLE_RUN_MODE=build DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
 ```
 
 Pada mode static, script tidak menyalakan frontend dev server karena Nginx langsung melayani `frontend/build`.

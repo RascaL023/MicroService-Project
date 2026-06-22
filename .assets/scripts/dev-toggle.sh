@@ -6,10 +6,15 @@ RUN_DIR="$ROOT_DIR/.assets/run"
 LOG_DIR="$RUN_DIR/logs"
 COMPOSE_FILE="$ROOT_DIR/api-gateway/docker-compose.yml"
 PROXY_MODE="${DEV_TOGGLE_PROXY_MODE:-dev}"
+RUN_MODE="${DEV_TOGGLE_RUN_MODE:-source}"
 case "$PROXY_MODE" in
   dev) DEFAULT_NGINX_CONF="$ROOT_DIR/reverse-proxy/nginx.dev.conf" ;;
   static) DEFAULT_NGINX_CONF="$ROOT_DIR/reverse-proxy/nginx.static.conf" ;;
   *) printf 'error: DEV_TOGGLE_PROXY_MODE harus dev atau static, bukan: %s\n' "$PROXY_MODE" >&2; exit 1 ;;
+esac
+case "$RUN_MODE" in
+  source|build) ;;
+  *) printf 'error: DEV_TOGGLE_RUN_MODE harus source atau build, bukan: %s\n' "$RUN_MODE" >&2; exit 1 ;;
 esac
 NGINX_CONF="${DEV_TOGGLE_NGINX_CONF:-$DEFAULT_NGINX_CONF}"
 NGINX_PREFIX="$RUN_DIR"
@@ -17,7 +22,6 @@ NGINX_PID_FILE="$RUN_DIR/proxy.pid"
 
 mkdir -p "$RUN_DIR" "$LOG_DIR"
 
-TARGETS=(compose auth user course notification frontend proxy)
 LOCAL_TARGETS=(auth user course notification frontend)
 
 usage() {
@@ -30,6 +34,7 @@ Commands:
   down|stop [target]      Stop target. Default target: all
   restart [target]        Restart target. Default target: all
   toggle [target]         Start target if stopped, stop it if running. Default target: all
+  build [target]          Build target. Default target: all
   status [target]         Show status. Default target: all
   logs <target>           Tail logs for target
 
@@ -49,10 +54,17 @@ Examples:
   ./.assets/scripts/toggle.sh status
   ./.assets/scripts/toggle.sh logs user
   ./.assets/scripts/toggle.sh toggle proxy
+  ./.assets/scripts/toggle.sh build all
+  DEV_TOGGLE_RUN_MODE=build DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
 
 Docker:
   Compose commands use sudo docker compose by default.
   Set DEV_TOGGLE_DOCKER_SUDO=0 to run docker without sudo.
+
+Run mode:
+  Set DEV_TOGGLE_RUN_MODE=source to run directly from source. This is the default.
+  Set DEV_TOGGLE_RUN_MODE=build to run compiled artifacts.
+  Go auth-service build output stays at backend/auth-service/cmd/bin/main.
 
 Nginx:
   Proxy uses sudo nginx by default.
@@ -159,13 +171,36 @@ target_workdir() {
 }
 
 target_command() {
-  case "$1" in
-    auth) printf './cmd/bin/main' ;;
-    user) printf './mvnw spring-boot:run -DskipTests' ;;
-    course) printf './mvnw spring-boot:run -DskipTests' ;;
-    notification) printf './mvnw spring-boot:run -DskipTests' ;;
-    frontend) printf 'npm run dev -- --host 0.0.0.0' ;;
+  case "$RUN_MODE:$1" in
+    source:auth) printf 'go run ./cmd/server' ;;
+    source:user|source:course|source:notification) printf './mvnw spring-boot:run -DskipTests' ;;
+    source:frontend) printf 'npm run dev -- --host 0.0.0.0' ;;
+    build:auth) printf './cmd/bin/main' ;;
+    build:user) printf 'java -jar target/user-service-0.0.1-SNAPSHOT.jar' ;;
+    build:course) printf 'java -jar target/course-service-0.0.1-SNAPSHOT.jar' ;;
+    build:notification) printf 'java -jar target/notification-service-0.0.1-SNAPSHOT.jar' ;;
+    build:frontend) printf 'npm run preview -- --host 0.0.0.0 --port 5173' ;;
     *) die "command target lokal tidak dikenal: $1" ;;
+  esac
+}
+
+target_artifact() {
+  case "$1" in
+    auth) printf 'cmd/bin/main' ;;
+    user) printf 'target/user-service-0.0.1-SNAPSHOT.jar' ;;
+    course) printf 'target/course-service-0.0.1-SNAPSHOT.jar' ;;
+    notification) printf 'target/notification-service-0.0.1-SNAPSHOT.jar' ;;
+    frontend) printf 'build/index.html' ;;
+    *) die "artifact target lokal tidak dikenal: $1" ;;
+  esac
+}
+
+target_build_command() {
+  case "$1" in
+    auth) printf 'mkdir -p cmd/bin && go build -o ./cmd/bin/main ./cmd/server' ;;
+    user|course|notification) printf './mvnw clean package -DskipTests' ;;
+    frontend) printf 'npm run build' ;;
+    *) die "build target lokal tidak dikenal: $1" ;;
   esac
 }
 
@@ -175,6 +210,27 @@ preflight_local() {
   workdir="$(target_workdir "$target")"
 
   [[ -d "$workdir" ]] || die "folder tidak ditemukan: $workdir"
+
+  if [[ "$RUN_MODE" == "build" ]]; then
+    local artifact
+    artifact="$workdir/$(target_artifact "$target")"
+
+    case "$target" in
+      auth)
+        [[ -x "$artifact" ]] || die "artifact auth belum ada/executable: $artifact. Jalankan: ./.assets/scripts/toggle.sh build auth"
+        ;;
+      course|user|notification)
+        has_command java || die "java tidak ditemukan"
+        [[ -f "$artifact" ]] || die "artifact jar belum ada: $artifact. Jalankan: ./.assets/scripts/toggle.sh build $target"
+        ;;
+      frontend)
+        has_command npm || die "npm tidak ditemukan"
+        [[ -f "$workdir/package.json" ]] || die "package.json tidak ditemukan di $workdir"
+        [[ -f "$artifact" ]] || die "frontend/build belum ada. Jalankan: ./.assets/scripts/toggle.sh build frontend"
+        ;;
+    esac
+    return 0
+  fi
 
   case "$target" in
     auth)
@@ -200,6 +256,27 @@ is_local_available() {
 
   [[ -d "$workdir" ]] || return 1
 
+  if [[ "$RUN_MODE" == "build" ]]; then
+    local artifact
+    artifact="$workdir/$(target_artifact "$target")"
+
+    case "$target" in
+      auth)
+        [[ -x "$artifact" ]]
+        ;;
+      course|user|notification)
+        has_command java && [[ -f "$artifact" ]]
+        ;;
+      frontend)
+        has_command npm && [[ -f "$workdir/package.json" ]] && [[ -f "$artifact" ]]
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+    return $?
+  fi
+
   case "$target" in
     auth)
       has_command go && [[ -f "$workdir/go.mod" ]]
@@ -214,6 +291,53 @@ is_local_available() {
       return 1
       ;;
   esac
+}
+
+preflight_build() {
+  local target="$1"
+  local workdir
+  workdir="$(target_workdir "$target")"
+
+  [[ -d "$workdir" ]] || die "folder tidak ditemukan: $workdir"
+
+  case "$target" in
+    auth)
+      has_command go || die "go tidak ditemukan"
+      [[ -f "$workdir/go.mod" ]] || die "go.mod tidak ditemukan di $workdir"
+      [[ -d "$workdir/cmd/server" ]] || die "entrypoint Go tidak ditemukan: $workdir/cmd/server"
+      ;;
+    course|user|notification)
+      [[ -x "$workdir/mvnw" ]] || die "mvnw tidak executable/tidak ditemukan di $workdir"
+      find "$workdir/src/main/java" -type f -name '*.java' -print -quit 2>/dev/null | grep -q . ||
+        die "source Java belum ditemukan di $workdir/src/main/java"
+      ;;
+    frontend)
+      has_command npm || die "npm tidak ditemukan"
+      [[ -f "$workdir/package.json" ]] || die "package.json tidak ditemukan di $workdir"
+      ;;
+  esac
+}
+
+build_local() {
+  local target="$1"
+  local workdir command artifact
+
+  preflight_build "$target"
+  workdir="$(target_workdir "$target")"
+  command="$(target_build_command "$target")"
+  artifact="$(target_artifact "$target")"
+
+  info "building $target"
+  (
+    cd "$workdir"
+    bash -lc "$command"
+  )
+
+  if [[ -e "$workdir/$artifact" ]]; then
+    info "$target build selesai: $workdir/$artifact"
+  else
+    die "$target build selesai, tapi artifact tidak ditemukan: $workdir/$artifact"
+  fi
 }
 
 compose_up() {
@@ -314,9 +438,9 @@ status_local() {
   local pid
   pid="$(target_pid "$target")"
   if is_pid_running "$pid"; then
-    printf '%-14s running pid=%s log=%s\n' "$target" "$pid" "$(log_file "$target")"
+    printf '%-14s running pid=%s mode=%s log=%s\n' "$target" "$pid" "$RUN_MODE" "$(log_file "$target")"
   else
-    printf '%-14s stopped log=%s\n' "$target" "$(log_file "$target")"
+    printf '%-14s stopped mode=%s log=%s\n' "$target" "$RUN_MODE" "$(log_file "$target")"
   fi
 }
 
@@ -384,7 +508,7 @@ start_proxy() {
   [[ -f "$NGINX_CONF" ]] || die "nginx config tidak ditemukan: $NGINX_CONF"
   if [[ "$PROXY_MODE" == "static" && -z "${DEV_TOGGLE_NGINX_CONF:-}" ]]; then
     [[ -f "$ROOT_DIR/frontend/build/index.html" ]] ||
-      die "frontend/build belum ada. Jalankan: cd frontend && npm run build"
+      die "frontend/build belum ada. Jalankan: ./.assets/scripts/toggle.sh build frontend"
   fi
   if is_proxy_running; then
     info "proxy sudah running (pid $(sed -n '1p' "$NGINX_PID_FILE"))"
@@ -468,19 +592,6 @@ logs_proxy() {
   tail -f "$logfile"
 }
 
-for_each_target() {
-  local action="$1"
-  local target="$2"
-
-  if [[ "$target" == "all" ]]; then
-    for item in "${TARGETS[@]}"; do
-      "$action" "$item"
-    done
-  else
-    "$action" "$target"
-  fi
-}
-
 start_target() {
   case "$1" in
     compose) compose_up ;;
@@ -547,6 +658,23 @@ logs_target() {
   esac
 }
 
+build_target() {
+  case "$1" in
+    compose|proxy)
+      info "skip $1: tidak ada artifact yang perlu dibuild"
+      ;;
+    course|auth|user|notification|frontend)
+      build_local "$1"
+      ;;
+    all)
+      for item in "${LOCAL_TARGETS[@]}"; do
+        build_local "$item"
+      done
+      ;;
+    *) die "target build tidak dikenal: $1" ;;
+  esac
+}
+
 toggle_target() {
   case "$1" in
     all)
@@ -605,6 +733,7 @@ main() {
       stop_target "$target"
       start_target "$target"
       ;;
+    build) build_target "$target" ;;
     toggle) toggle_target "$target" ;;
     status|ps) status_target "$target" ;;
     logs|log) logs_target "$target" ;;

@@ -186,6 +186,7 @@ Perintah umum:
 
 ```bash
 ./.assets/scripts/toggle.sh status
+./.assets/scripts/toggle.sh build all
 ./.assets/scripts/toggle.sh logs proxy
 ./.assets/scripts/toggle.sh logs compose
 ./.assets/scripts/toggle.sh restart proxy
@@ -193,15 +194,37 @@ Perintah umum:
 ```
 
 Mode default adalah `DEV_TOGGLE_PROXY_MODE=dev`, sehingga Nginx meneruskan frontend ke Vite `:5173`.
+Mode run default adalah `DEV_TOGGLE_RUN_MODE=source`, sehingga service dijalankan langsung dari source:
+
+- `auth-service` memakai `go run ./cmd/server`;
+- service Java memakai `./mvnw spring-boot:run -DskipTests`;
+- frontend memakai Vite dev server.
+
+Untuk build semua service:
+
+```bash
+./.assets/scripts/toggle.sh build all
+```
+
+Hasil build utama:
+
+- `backend/auth-service/cmd/bin/main`;
+- `backend/user-service/target/user-service-0.0.1-SNAPSHOT.jar`;
+- `backend/course-service/target/course-service-0.0.1-SNAPSHOT.jar`;
+- `backend/notification-service/target/notification-service-0.0.1-SNAPSHOT.jar`;
+- `frontend/build`.
+
+Untuk menjalankan dari hasil build:
+
+```bash
+DEV_TOGGLE_RUN_MODE=build ./.assets/scripts/toggle.sh up all
+```
 
 Untuk mode static:
 
 ```bash
-cd frontend
-npm run build
-
-cd ..
-DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
+./.assets/scripts/toggle.sh build frontend
+DEV_TOGGLE_RUN_MODE=build DEV_TOGGLE_PROXY_MODE=static ./.assets/scripts/toggle.sh up all
 ```
 
 Pada mode static, script tidak menyalakan frontend dev server karena Nginx langsung melayani `frontend/build`.

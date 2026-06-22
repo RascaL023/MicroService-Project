@@ -19,9 +19,10 @@ Dokumen ini membantu memilih file dokumentasi yang tepat.
 Setup project di Linux:
 
 1. baca `README.md`;
-2. jalankan `./.assets/scripts/toggle.sh up all`;
-3. buka `http://localhost:9000`;
-4. cek log dengan `./.assets/scripts/toggle.sh logs <target>`.
+2. jika ingin artifact terbaru, jalankan `./.assets/scripts/toggle.sh build all`;
+3. jalankan `./.assets/scripts/toggle.sh up all`;
+4. buka `http://localhost:9000`;
+5. cek log dengan `./.assets/scripts/toggle.sh logs <target>`.
 
 Menjalankan Nginx:
 
