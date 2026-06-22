@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import '../app.css';
 	import Icons from '$lib/components/Icons.svelte';
+	import Footer from '$lib/components/Footer.svelte';
 	import { api, clearSession, hasAnyAuthority, isAdminSession, isPublicRoute, readSession, sessionKey } from '$lib/api';
 	import type { LoginData } from '$lib/types';
 
@@ -271,6 +272,9 @@
 		<main class="content-body">
 			{@render children()}
 		</main>
+
+		<!-- Footer Component -->
+		<Footer />
 	</div>
 </div>
 
