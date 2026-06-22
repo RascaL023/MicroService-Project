@@ -1,4 +1,4 @@
-# User Import Excel Format
+# Format Excel Import User
 
 Gunakan sheet pertama dengan header di baris ke-4.
 
@@ -7,7 +7,8 @@ Gunakan sheet pertama dengan header di baris ke-4.
 | Aura Adams | aura@example.com | P | TI |
 | John Doe | john@example.com | L | MI |
 
-Rules:
+Aturan:
+
 - File harus `.xlsx` atau `.xls`.
 - Maksimal file mengikuti konfigurasi multipart service, default 12MB.
 - Maksimal 100 baris data.
@@ -17,4 +18,4 @@ Rules:
 - Role sistem tidak diisi dari user-service. Auth-service otomatis memberi role default `USER`.
 - Email duplikat di file masuk status `FAILED`.
 - Email yang sudah aktif di database masuk status `SKIPPED`.
-- Import bersifat parsial: row valid dibuat, row existing dilewati, row invalid masuk report.
+- Import bersifat parsial: baris valid dibuat, baris yang sudah ada dilewati, baris invalid masuk laporan.

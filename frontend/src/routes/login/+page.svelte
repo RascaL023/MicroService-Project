@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import Notice from '$lib/components/Notice.svelte';
 	import Icons from '$lib/components/Icons.svelte';
-	import { api, isAdminSession, saveSession } from '$lib/api';
+	import { api, isAdminSession, readSession, saveSession } from '$lib/api';
 	import type { LoginData } from '$lib/types';
 	import { fade } from 'svelte/transition';
 
@@ -15,6 +17,20 @@
 	let error = $state('');
 	let success = $state('');
 
+	onMount(() => {
+		const redirectIfAuthenticated = () => {
+			const session = readSession();
+			if (!session) return;
+
+			void goto(isAdminSession(session) ? '/admin' : '/app', { replaceState: true });
+		};
+
+		redirectIfAuthenticated();
+		window.addEventListener('pageshow', redirectIfAuthenticated);
+
+		return () => window.removeEventListener('pageshow', redirectIfAuthenticated);
+	});
+
 	async function login() {
 		busy = true; error = ''; success = '';
 		try {
@@ -24,10 +40,7 @@
 			});
 			if (!payload.data) throw new Error('Login response kosong.');
 			saveSession(payload.data);
-			success = 'Login berhasil. Selamat datang kembali!';
-			setTimeout(() => {
-				window.location.href = isAdminSession(payload.data ?? null) ? '/admin' : '/app';
-			}, 800);
+			await goto(isAdminSession(payload.data) ? '/admin' : '/app', { replaceState: true });
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Login gagal.';
 		} finally {
@@ -72,6 +85,8 @@
 	<title>{mode === 'login' ? 'Masuk' : mode === 'activate' ? 'Aktivasi' : 'Reset Password'} - Divdik Course</title>
 </svelte:head>
 
+<Notice {error} {success} />
+
 <div class="login-container">
 	<div class="login-card card">
 		<div class="brand-header">
@@ -86,22 +101,20 @@
 			<button class:active={mode === 'forgot'} onclick={() => mode = 'forgot'}>Reset Password</button>
 		</div>
 
-		<Notice {error} {success} />
-
 		{#if mode === 'login'}
 			<form onsubmit={(e) => { e.preventDefault(); void login(); }} in:fade={{ duration: 200 }}>
 				<div class="form-group">
 					<label for="email">Email Address</label>
 					<div class="input-with-icon">
 						<Icons name="users" size={18} />
-						<input bind:value={email} id="email" type="email" placeholder="nama@email.com" required />
+						<input bind:value={email} id="email" type="email" maxlength="254" placeholder="nama@email.com" required />
 					</div>
 				</div>
 				<div class="form-group">
 					<label for="password">Password</label>
 					<div class="input-with-icon">
 						<Icons name="shield" size={18} />
-						<input bind:value={password} id="password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" required />
+						<input bind:value={password} id="password" type={showPassword ? 'text' : 'password'} maxlength="128" placeholder="••••••••" required />
 						<button type="button" class="toggle-password" onclick={() => showPassword = !showPassword}>
 							<Icons name={showPassword ? 'eyeOff' : 'eye'} size={18} />
 						</button>
@@ -125,7 +138,7 @@
 					<label for="act-email">Email Terdaftar</label>
 					<div class="input-with-icon">
 						<Icons name="users" size={18} />
-						<input bind:value={activationEmail} id="act-email" type="email" placeholder="nama@email.com" required />
+						<input bind:value={activationEmail} id="act-email" type="email" maxlength="254" placeholder="nama@email.com" required />
 					</div>
 				</div>
 				<button class="btn btn-primary w-full" disabled={busy} type="submit">
@@ -146,7 +159,7 @@
 					<label for="reset-email">Email Akun</label>
 					<div class="input-with-icon">
 						<Icons name="users" size={18} />
-						<input bind:value={resetEmail} id="reset-email" type="email" placeholder="nama@email.com" required />
+						<input bind:value={resetEmail} id="reset-email" type="email" maxlength="254" placeholder="nama@email.com" required />
 					</div>
 				</div>
 				<button class="btn btn-primary w-full" disabled={busy} type="submit">

@@ -18,7 +18,7 @@
 	let majors = $state<Major[]>([]);
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let session = $state<LoginData | null>(null);
-	let filters = $state({ name: '', batch: '', major: '', sortBy: 'id', sortDirection: 'desc' });
+	let filters = $state({ id: '', name: '', batch: '', major: '', sortBy: 'id', sortDirection: 'desc' });
 	let form = $state({ name: '', email: '', batch: '', major: '', gender: 'L' });
 	let patch = $state({ id: '', name: '', email: '', batch: '', major: '', gender: 'L', graduatedAt: '', status: 'ACTIVE' });
 	let showCreate = $state(false);
@@ -69,6 +69,18 @@
 	}
 
 	async function loadUsers() {
+		if (filters.id.trim()) {
+			const userId = filters.id.trim();
+			try {
+				const payload = await api<User>(`/api/users/${userId}`);
+				users = payload.data ? [payload.data] : [];
+			} catch {
+				users = [];
+			}
+			pageMeta = { ...pageMeta, page: 0, totalPages: 1, totalElements: users.length };
+			return;
+		}
+
 		const query = new URLSearchParams({
 			page: String(pageMeta.page),
 			size: String(pageMeta.size),
@@ -407,6 +419,10 @@
 <AccessPanel authorities={['user.read', 'user.*']}>
 	<section class="toolbar">
 		<form class="filters" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
+			<label>
+				<span>User ID</span>
+				<input bind:value={filters.id} inputmode="numeric" placeholder="Contoh: 24" />
+			</label>
 			<label>
 				<span>Nama</span>
 				<input bind:value={filters.name} placeholder="Cari nama..." />
@@ -772,7 +788,7 @@
 
 	.filters {
 		display: grid;
-		grid-template-columns: minmax(190px, 1fr) repeat(3, minmax(140px, 190px)) auto;
+		grid-template-columns: minmax(115px, 0.6fr) minmax(190px, 1.2fr) repeat(4, minmax(130px, 170px)) auto;
 		gap: 0.875rem;
 		align-items: end;
 		flex: 1;

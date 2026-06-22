@@ -19,8 +19,10 @@
 	let pageMeta = $state<PaginationMeta>({ page: 0, size: 10, totalPages: 1, totalElements: 0 });
 	let filterGroup = $state('');
 	let filterDay = $state('');
-	let form = $state({ groupId: '', dayOfWeek: 'MONDAY', templateId: '' });
-	let templateForm = $state({ name: '', startTime: '09:00:00', endTime: '11:00:00' });
+	let form = $state({ id: '', groupId: '', dayOfWeek: 'MONDAY', templateId: '' });
+	let templateForm = $state({ id: '', name: '', startTime: '09:00:00', endTime: '11:00:00' });
+	let editingSchedule = $state<GroupSchedule | null>(null);
+	let editingTemplate = $state<ScheduleTemplate | null>(null);
 	let showScheduleModal = $state(false);
 	let showTemplateModal = $state(false);
 	let confirmState = $state({
@@ -37,6 +39,7 @@
 
 	const isUserPortal = $derived(page.url.pathname.startsWith('/app/'));
 	const canCreate = $derived(!isUserPortal && hasAnyAuthority(session, ['group-schedule.create', 'group-schedule.*']));
+	const canUpdate = $derived(!isUserPortal && hasAnyAuthority(session, ['group-schedule.update', 'group-schedule.*']));
 	const canDelete = $derived(!isUserPortal && hasAnyAuthority(session, ['group-schedule.delete', 'group-schedule.*']));
 
 	onMount(() => {
@@ -58,14 +61,19 @@
 	async function loadAll(currentSession: LoginData | null = session) {
 		loading = true;
 		try {
-			const mayCreate = !isUserPortal && hasAnyAuthority(currentSession, ['group-schedule.create', 'group-schedule.*']);
+			const mayManageTemplates = !isUserPortal && hasAnyAuthority(currentSession, [
+				'group-schedule.create',
+				'group-schedule.update',
+				'group-schedule.delete',
+				'group-schedule.*'
+			]);
 			if (isUserPortal) {
 				const enrollmentPayload = await api<PageData<Enrollment> | Enrollment[]>('/api/enrollments/me?page=0&size=100&sort=id,desc');
 				groups = groupsFromEnrollments(pageItems(enrollmentPayload));
 			} else {
 				const groupPayload = await api<PageData<Group> | Group[]>('/api/groups?status=ON_GOING&sort=name,asc');
 				groups = pageItems(groupPayload);
-				if (mayCreate) {
+				if (mayManageTemplates) {
 					const templatePayload = await api<PageData<ScheduleTemplate> | ScheduleTemplate[]>('/api/schedule-templates?sort=startTime,asc');
 					templates = pageItems(templatePayload);
 				} else {
@@ -104,31 +112,53 @@
 
 	async function createTemplate() {
 		await submit(async () => {
-			const created = await api<ScheduleTemplate>('/api/schedule-templates', {
-				method: 'POST',
-				body: JSON.stringify(templateForm)
-			});
-			templateForm = { name: '', startTime: templateForm.startTime, endTime: templateForm.endTime };
+			const wasEdit = Boolean(templateForm.id);
+			const body = {
+				name: templateForm.name,
+				startTime: templateForm.startTime,
+				endTime: templateForm.endTime
+			};
+			const payload = templateForm.id
+				? await api<ScheduleTemplate>(`/api/schedule-templates/${templateForm.id}`, {
+					method: 'PATCH',
+					body: JSON.stringify(body)
+				})
+				: await api<ScheduleTemplate>('/api/schedule-templates', {
+					method: 'POST',
+					body: JSON.stringify(body)
+				});
+			editingTemplate = null;
+			templateForm = { id: '', name: '', startTime: templateForm.startTime, endTime: templateForm.endTime };
 			await loadTemplates();
-			if (created.data) form.templateId = String(created.data.id);
-			showTemplateModal = false;
-			success = 'Template waktu berhasil dibuat.';
+			if (payload.data) form.templateId = String(payload.data.id);
+			await loadSchedules();
+			success = wasEdit ? 'Template waktu berhasil diupdate.' : 'Template waktu berhasil dibuat.';
 		});
 	}
 
-	async function addSchedule() {
+	async function saveSchedule() {
 		await submit(async () => {
-			await api<GroupSchedule>('/api/group-schedules', {
-				method: 'POST',
-				body: JSON.stringify({
-					groupId: Number(form.groupId),
-					dayOfWeek: form.dayOfWeek,
-					templateId: Number(form.templateId)
-				})
-			});
+			const wasEdit = Boolean(form.id);
+			const body = {
+				groupId: Number(form.groupId),
+				dayOfWeek: form.dayOfWeek,
+				templateId: Number(form.templateId)
+			};
+			if (form.id) {
+				await api<GroupSchedule>(`/api/group-schedules/${form.id}`, {
+					method: 'PATCH',
+					body: JSON.stringify(body)
+				});
+			} else {
+				await api<GroupSchedule>('/api/group-schedules', {
+					method: 'POST',
+					body: JSON.stringify(body)
+				});
+			}
 			await loadSchedules();
+			editingSchedule = null;
 			showScheduleModal = false;
-			success = 'Jadwal berhasil ditambahkan.';
+			success = wasEdit ? 'Jadwal berhasil diupdate.' : 'Jadwal berhasil ditambahkan.';
 		});
 	}
 
@@ -142,6 +172,23 @@
 				await api<null>(`/api/group-schedules/${scheduleId}`, { method: 'DELETE' });
 				await loadSchedules();
 				success = 'Jadwal berhasil dihapus.';
+			});
+		});
+	}
+
+	async function deleteTemplate(template: ScheduleTemplate) {
+		askConfirm({
+			title: 'Hapus template waktu?',
+			message: `Template ${template.name} tidak akan tersedia lagi untuk jadwal baru. Jadwal lama yang sudah memakai template ini sebaiknya dicek ulang setelah penghapusan.`,
+			confirmLabel: 'Hapus Template'
+		}, async () => {
+			await submit(async () => {
+				await api<null>(`/api/schedule-templates/${template.id}`, { method: 'DELETE' });
+				if (form.templateId === String(template.id)) form.templateId = '';
+				if (templateForm.id === String(template.id)) resetTemplateForm();
+				await loadTemplates();
+				await loadSchedules();
+				success = 'Template waktu berhasil dihapus.';
 			});
 		});
 	}
@@ -173,6 +220,43 @@
 	function applyFilters() {
 		pageMeta = { ...pageMeta, page: 0 };
 		void loadSchedules();
+	}
+
+	function openCreateSchedule() {
+		editingSchedule = null;
+		form = {
+			id: '',
+			groupId: form.groupId || (groups[0] ? String(groups[0].id) : ''),
+			dayOfWeek: 'MONDAY',
+			templateId: form.templateId || (templates[0] ? String(templates[0].id) : '')
+		};
+		showScheduleModal = true;
+	}
+
+	function openEditSchedule(schedule: GroupSchedule) {
+		editingSchedule = schedule;
+		form = {
+			id: String(schedule.id),
+			groupId: String(schedule.groupId),
+			dayOfWeek: schedule.dayOfWeek,
+			templateId: schedule.templateId ? String(schedule.templateId) : ''
+		};
+		showScheduleModal = true;
+	}
+
+	function editTemplate(template: ScheduleTemplate) {
+		editingTemplate = template;
+		templateForm = {
+			id: String(template.id),
+			name: template.name,
+			startTime: template.startTime,
+			endTime: template.endTime
+		};
+	}
+
+	function resetTemplateForm() {
+		editingTemplate = null;
+		templateForm = { id: '', name: '', startTime: '09:00:00', endTime: '11:00:00' };
 	}
 
 	function groupsFromEnrollments(items: Enrollment[]) {
@@ -208,16 +292,18 @@
 <div class="page-heading">
 	<PageTitle eyebrow="Academic Operations" title="Jadwal Group" description="Kelola template waktu dan jadwal aktif untuk group yang sedang berjalan." />
 
-	{#if canCreate}
+	{#if canCreate || canUpdate || canDelete}
 		<section class="page-actions schedule-actions" aria-label="Aksi jadwal">
-			<button class="btn btn-secondary" type="button" onclick={() => showTemplateModal = true}>
+			<button class="btn btn-secondary" type="button" onclick={() => { resetTemplateForm(); showTemplateModal = true; }}>
 				<Icons name="clock" size={17} />
-				<span>Buat Template Waktu</span>
+				<span>Template Waktu</span>
 			</button>
-			<button class="btn btn-primary" type="button" onclick={() => showScheduleModal = true}>
-				<Icons name="calendar" size={17} />
-				<span>Tambah Jadwal</span>
-			</button>
+			{#if canCreate}
+				<button class="btn btn-primary" type="button" onclick={openCreateSchedule}>
+					<Icons name="calendar" size={17} />
+					<span>Tambah Jadwal</span>
+				</button>
+			{/if}
 		</section>
 	{/if}
 </div>
@@ -267,7 +353,7 @@
 							<th>Hari</th>
 							<th>Template</th>
 							<th>Waktu</th>
-							{#if canDelete}<th class="text-right">Aksi</th>{/if}
+							{#if canUpdate || canDelete}<th class="text-right">Aksi</th>{/if}
 						</tr>
 					</thead>
 					<tbody>
@@ -278,11 +364,20 @@
 								<td>{dayLabel(schedule.dayOfWeek)}</td>
 								<td>{schedule.templateName ?? '-'}</td>
 								<td><span class="badge badge-blue">{timeLabel(schedule.startTime, schedule.endTime)}</span></td>
-								{#if canDelete}
+								{#if canUpdate || canDelete}
 									<td class="text-right">
-										<button class="btn btn-ghost danger icon-button" type="button" onclick={() => deleteSchedule(schedule.id)}>
-											<Icons name="x" size={16} />
-										</button>
+										<div class="row-actions">
+											{#if canUpdate}
+												<button class="btn btn-ghost icon-button" type="button" aria-label="Edit jadwal" onclick={() => openEditSchedule(schedule)}>
+													<Icons name="edit" size={16} />
+												</button>
+											{/if}
+											{#if canDelete}
+												<button class="btn btn-ghost danger icon-button" type="button" aria-label="Hapus jadwal" onclick={() => deleteSchedule(schedule.id)}>
+													<Icons name="x" size={16} />
+												</button>
+											{/if}
+										</div>
 									</td>
 								{/if}
 							</tr>
@@ -295,8 +390,8 @@
 	</section>
 </AccessPanel>
 
-{#if showScheduleModal && canCreate}
-	<div class="modal-backdrop" role="presentation" onclick={() => showScheduleModal = false}>
+{#if showScheduleModal && (form.id ? canUpdate : canCreate)}
+	<div class="modal-backdrop" role="presentation" onclick={() => { showScheduleModal = false; editingSchedule = null; }}>
 		<section
 			class="modal-panel"
 			role="dialog"
@@ -307,14 +402,20 @@
 		>
 			<div class="modal-head">
 				<div>
-					<h3>Tambah Jadwal</h3>
-					<p>Pilih group aktif, hari, dan template waktu.</p>
+					<h3>{form.id ? 'Edit Jadwal' : 'Tambah Jadwal'}</h3>
+					<p>{form.id ? 'Form sudah terisi dari jadwal yang dipilih. Ubah hanya bagian yang diperlukan.' : 'Pilih group aktif, hari, dan template waktu.'}</p>
 				</div>
-				<button class="btn btn-ghost icon-button" aria-label="Tutup modal" type="button" onclick={() => showScheduleModal = false}>
+				<button class="btn btn-ghost icon-button" aria-label="Tutup modal" type="button" onclick={() => { showScheduleModal = false; editingSchedule = null; }}>
 					<Icons name="x" size={18} />
 				</button>
 			</div>
-			<form class="stack-form modal-form" onsubmit={(event) => { event.preventDefault(); void addSchedule(); }}>
+			<form class="stack-form modal-form" onsubmit={(event) => { event.preventDefault(); void saveSchedule(); }}>
+				{#if editingSchedule}
+					<div class="context-box">
+						<strong>Data saat ini</strong>
+						<p>{editingSchedule.groupName} • {dayLabel(editingSchedule.dayOfWeek)} • {editingSchedule.templateName ?? '-'} • {timeLabel(editingSchedule.startTime, editingSchedule.endTime)}</p>
+					</div>
+				{/if}
 				<label>
 					<span>Group</span>
 					<select bind:value={form.groupId} required>
@@ -345,16 +446,18 @@
 					<div class="soft-note">Belum ada template waktu. Buat template dulu sebelum menambahkan jadwal.</div>
 				{/if}
 				<div class="modal-actions">
-					<button class="btn btn-ghost" type="button" onclick={() => showScheduleModal = false}>Batal</button>
-					<button class="btn btn-primary" type="submit" disabled={!form.groupId || !form.templateId}>Tambah Jadwal</button>
+					<button class="btn btn-ghost" type="button" onclick={() => { showScheduleModal = false; editingSchedule = null; }}>Batal</button>
+					<button class="btn btn-primary" type="submit" disabled={!form.groupId || !form.templateId}>
+						{form.id ? 'Simpan Jadwal' : 'Tambah Jadwal'}
+					</button>
 				</div>
 			</form>
 		</section>
 	</div>
 {/if}
 
-{#if showTemplateModal && canCreate}
-	<div class="modal-backdrop" role="presentation" onclick={() => showTemplateModal = false}>
+{#if showTemplateModal && (canCreate || canUpdate || canDelete)}
+	<div class="modal-backdrop" role="presentation" onclick={() => { showTemplateModal = false; resetTemplateForm(); }}>
 		<section
 			class="modal-panel"
 			role="dialog"
@@ -366,32 +469,83 @@
 			<div class="modal-head">
 				<div>
 					<h3>Template Waktu</h3>
-					<p>Slot reusable untuk semua jadwal group.</p>
+					<p>{templateForm.id ? 'Form sudah terisi dari template yang dipilih. Ubah hanya bagian yang memang perlu diganti.' : 'Slot reusable untuk semua jadwal group.'}</p>
 				</div>
-				<button class="btn btn-ghost icon-button" aria-label="Tutup modal" type="button" onclick={() => showTemplateModal = false}>
+				<button class="btn btn-ghost icon-button" aria-label="Tutup modal" type="button" onclick={() => { showTemplateModal = false; resetTemplateForm(); }}>
 					<Icons name="x" size={18} />
 				</button>
 			</div>
 			<form class="stack-form modal-form" onsubmit={(event) => { event.preventDefault(); void createTemplate(); }}>
-				<label>
-					<span>Nama Template</span>
-					<input bind:value={templateForm.name} placeholder="Contoh: Pagi 09-11" required />
-				</label>
-				<div class="form-row">
+				{#if templateForm.id}
+					<div class="context-box compact">
+						<strong>Template aktif</strong>
+						<p>{editingTemplate?.name ?? templateForm.name} • {timeLabel(editingTemplate?.startTime ?? templateForm.startTime, editingTemplate?.endTime ?? templateForm.endTime)}</p>
+					</div>
+					<div class="warning-box">
+						<Icons name="alertTriangle" size={18} />
+						<p>
+							Mengubah template akan memengaruhi semua jadwal group yang memakai template ini.
+							Nama dan rentang waktu yang tampil pada jadwal tersebut akan mengikuti nilai baru.
+						</p>
+					</div>
+				{/if}
+
+				{#if canCreate || (templateForm.id && canUpdate)}
 					<label>
-						<span>Mulai</span>
-						<input bind:value={templateForm.startTime} type="time" step="1" required />
+						<span>Nama Template</span>
+						<input bind:value={templateForm.name} placeholder="Contoh: Pagi 09-11" required />
 					</label>
-					<label>
-						<span>Selesai</span>
-						<input bind:value={templateForm.endTime} type="time" step="1" required />
-					</label>
-				</div>
-				<div class="modal-actions">
-					<button class="btn btn-ghost" type="button" onclick={() => showTemplateModal = false}>Batal</button>
-					<button class="btn btn-primary" type="submit">Buat Template</button>
-				</div>
+					<div class="form-row">
+						<label>
+							<span>Mulai</span>
+							<input bind:value={templateForm.startTime} type="time" step="1" required />
+						</label>
+						<label>
+							<span>Selesai</span>
+							<input bind:value={templateForm.endTime} type="time" step="1" required />
+						</label>
+					</div>
+					<div class="modal-actions">
+						<button class="btn btn-ghost" type="button" onclick={resetTemplateForm}>Reset</button>
+						<button class="btn btn-primary" type="submit">
+							{templateForm.id ? 'Simpan Template' : 'Buat Template'}
+						</button>
+					</div>
+				{:else}
+					<div class="soft-note">Anda hanya dapat melihat atau menghapus template waktu.</div>
+				{/if}
 			</form>
+
+			<div class="template-list">
+				<div class="template-list-head">
+					<span>Template Tersedia</span>
+					<strong>{templates.length}</strong>
+				</div>
+				{#if templates.length === 0}
+					<div class="soft-note">Belum ada template waktu.</div>
+				{:else}
+					{#each templates as template}
+						<div class="template-item" class:active={templateForm.id === String(template.id)}>
+							<div>
+								<strong>{template.name}</strong>
+								<span>{timeLabel(template.startTime, template.endTime)}</span>
+							</div>
+							<div class="template-actions">
+								{#if canUpdate}
+									<button class="btn btn-ghost icon-button" type="button" aria-label="Edit template" onclick={() => editTemplate(template)}>
+										<Icons name="edit" size={16} />
+									</button>
+								{/if}
+								{#if canDelete}
+									<button class="btn btn-ghost danger icon-button" type="button" aria-label="Hapus template" onclick={() => deleteTemplate(template)}>
+										<Icons name="x" size={16} />
+									</button>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				{/if}
+			</div>
 		</section>
 	</div>
 {/if}
@@ -469,6 +623,127 @@
 		font-weight: 700;
 	}
 
+	.context-box {
+		display: grid;
+		gap: 0.35rem;
+		padding: 0.875rem;
+		border: 1px solid var(--border-light);
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--bg-soft) 74%, transparent);
+	}
+
+	.context-box.compact {
+		padding: 0.75rem;
+	}
+
+	.context-box strong {
+		font-size: 0.78rem;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+
+	.context-box p {
+		margin: 0;
+		font-size: 0.92rem;
+		line-height: 1.45;
+		color: var(--text-main);
+	}
+
+	.warning-box {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: start;
+		padding: 0.875rem;
+		border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+		background: color-mix(in srgb, var(--warning) 10%, var(--bg-surface));
+		border-radius: var(--radius-sm);
+		color: var(--text-main);
+	}
+
+	.warning-box :global(svg) {
+		color: var(--warning);
+		margin-top: 0.125rem;
+	}
+
+	.warning-box p {
+		margin: 0;
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+
+	.row-actions,
+	.template-actions {
+		display: inline-flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.35rem;
+	}
+
+	.template-list {
+		display: grid;
+		gap: 0.65rem;
+		margin-top: 1.1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-light);
+	}
+
+	.template-list-head,
+	.template-item {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.template-list-head {
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		font-weight: 800;
+		text-transform: uppercase;
+	}
+
+	.template-list-head strong {
+		color: var(--text-main);
+	}
+
+	.template-item {
+		padding: 0.75rem;
+		border: 1px solid var(--border-light);
+		border-radius: var(--radius-sm);
+		background: var(--bg-app);
+		transition:
+			border-color var(--motion-fast, 160ms ease),
+			background-color var(--motion-fast, 160ms ease),
+			transform var(--motion-fast, 160ms ease);
+	}
+
+	.template-item:hover,
+	.template-item.active {
+		border-color: var(--primary-border);
+		background: var(--primary-soft);
+		transform: translateY(-1px);
+	}
+
+	.template-item > div:first-child {
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+
+	.template-item strong,
+	.template-item span {
+		overflow-wrap: anywhere;
+	}
+
+	.template-item span {
+		color: var(--text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+
 	.table-wrap {
 		min-width: 0;
 	}
@@ -497,6 +772,14 @@
 	@media (max-width: 560px) {
 		.form-row {
 			grid-template-columns: 1fr;
+		}
+
+		.template-item {
+			grid-template-columns: 1fr;
+		}
+
+		.template-actions {
+			justify-content: flex-start;
 		}
 
 		.schedule-filters .btn,

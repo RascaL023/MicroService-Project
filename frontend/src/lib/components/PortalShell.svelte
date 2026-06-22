@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
+	import { fly } from 'svelte/transition';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import ConfirmModal from './ConfirmModal.svelte';
 	import Icons from './Icons.svelte';
 	import {
 		api,
@@ -35,6 +37,7 @@
 	let sidebarOpen = $state(false);
 	let isMobile = $state(false);
 	let theme = $state<'light' | 'dark'>('light');
+	let showLogoutConfirm = $state(false);
 
 	const themeKey = 'mcr.ui.theme';
 	const isAdminPortal = $derived(kind === 'admin');
@@ -114,6 +117,8 @@
 		const syncSession = () => {
 			session = readSession();
 			if (!session) {
+				ready = false;
+				showLogoutConfirm = false;
 				void goto('/login', { replaceState: true });
 				return;
 			}
@@ -137,10 +142,12 @@
 		syncViewport();
 		syncTheme();
 		window.addEventListener('session-change', syncSession);
+		window.addEventListener('pageshow', syncSession);
 		window.addEventListener('storage', syncStorage);
 		window.addEventListener('resize', syncViewport);
 		return () => {
 			window.removeEventListener('session-change', syncSession);
+			window.removeEventListener('pageshow', syncSession);
 			window.removeEventListener('storage', syncStorage);
 			window.removeEventListener('resize', syncViewport);
 		};
@@ -179,12 +186,14 @@
 	}
 
 	async function logout() {
+		showLogoutConfirm = false;
 		try {
 			await api('/api/auths/logout', { method: 'POST' });
 		} finally {
 			clearSession();
 			session = null;
-			void goto('/login', { replaceState: true });
+			ready = false;
+			await goto('/login', { replaceState: true });
 		}
 	}
 </script>
@@ -229,7 +238,7 @@
 						<Icons name="chevronRight" size={15} />
 					</a>
 				{/if}
-				<button class="nav-link logout-button" type="button" onclick={logout}>
+				<button class="nav-link logout-button" type="button" onclick={() => showLogoutConfirm = true}>
 					<Icons name="logout" size={19} />
 					<span>Keluar</span>
 				</button>
@@ -268,7 +277,15 @@
 			</header>
 
 			<main class="content-body portal-content">
-				{@render children()}
+				{#key page.url.pathname}
+					<div
+						class="portal-page"
+						in:fly={{ y: 14, duration: 260, delay: 60 }}
+						out:fly={{ y: -10, duration: 180 }}
+					>
+						{@render children()}
+					</div>
+				{/key}
 			</main>
 		</div>
 	</div>
@@ -276,6 +293,16 @@
 	{#if sidebarOpen && isMobile}
 		<button class="sidebar-overlay" type="button" onclick={closeSidebar} aria-label="Tutup menu"></button>
 	{/if}
+
+	<ConfirmModal
+		open={showLogoutConfirm}
+		title="Keluar dari sesi?"
+		message="Sesi login Anda akan diakhiri dan Anda perlu masuk kembali untuk mengakses portal."
+		confirmLabel="Ya, keluar"
+		cancelLabel="Tetap di sini"
+		onConfirm={logout}
+		onCancel={() => showLogoutConfirm = false}
+	/>
 {/if}
 
 <style>
@@ -357,6 +384,10 @@
 
 	.portal-user:hover {
 		background: var(--primary-soft);
+	}
+
+	.portal-page {
+		min-width: 0;
 	}
 
 	.portal-user > div:first-child {

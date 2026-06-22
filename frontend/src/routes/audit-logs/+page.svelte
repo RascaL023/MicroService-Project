@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fade, fly } from 'svelte/transition';
 	import AccessPanel from '$lib/components/AccessPanel.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icons from '$lib/components/Icons.svelte';
@@ -92,6 +93,10 @@
 		return action.replaceAll('_', ' ');
 	}
 
+	function entityTone(entityType: string) {
+		return `tone-${entityType.toLowerCase().replaceAll('_', '-')}`;
+	}
+
 	function metadataLabel(value?: string | null) {
 		if (!value) return 'Tidak ada metadata.';
 		try {
@@ -109,7 +114,7 @@
 <Notice {error} />
 
 <AccessPanel authorities={['log-access']}>
-	<section class="audit-toolbar card">
+	<section class="audit-toolbar card" in:fly={{ y: 12, duration: 260 }}>
 		<div class="toolbar-head">
 			<div>
 				<span class="mini-label">Filter Log</span>
@@ -167,8 +172,8 @@
 		</form>
 	</section>
 
-	<section class="audit-shell">
-		<div class="audit-list">
+	<section class="audit-shell" in:fade={{ duration: 220 }}>
+		<div class="audit-list" in:fly={{ y: 14, duration: 260, delay: 80 }}>
 			<div class="audit-list-head">
 				<div>
 					<span class="mini-label">Course Service</span>
@@ -182,9 +187,15 @@
 			{:else if logs.length === 0}
 				<EmptyState text="Belum ada audit log untuk filter ini." />
 			{:else}
-				{#each logs as log}
-					<button class="audit-row" class:active={selectedLog?.id === log.id} type="button" onclick={() => selectedLog = log}>
-						<div class="audit-mark">
+				{#each logs as log, index}
+					<button
+						class="audit-row"
+						class:active={selectedLog?.id === log.id}
+						type="button"
+						onclick={() => selectedLog = log}
+						in:fly={{ y: 10, duration: 220, delay: Math.min(index * 24, 180) }}
+					>
+						<div class={`audit-mark ${entityTone(log.entityType)}`}>
 							<Icons name="clipboardList" size={18} />
 						</div>
 						<div class="audit-main">
@@ -204,31 +215,35 @@
 			{/if}
 		</div>
 
-		<aside class="audit-detail">
+		<aside class="audit-detail" in:fly={{ x: 14, duration: 280, delay: 120 }}>
 			{#if selectedLog}
-				<div class="detail-head">
-					<div>
-						<span>Detail</span>
-						<h2>{compactAction(selectedLog.action)}</h2>
+				{#key selectedLog.id}
+					<div class="detail-content" in:fade={{ duration: 180 }}>
+						<div class="detail-head">
+							<div>
+								<span>Detail</span>
+								<h2>{compactAction(selectedLog.action)}</h2>
+							</div>
+							<button class="btn btn-ghost icon-button" type="button" aria-label="Tutup detail" onclick={() => selectedLog = null}>
+								<Icons name="x" size={17} />
+							</button>
+						</div>
+						<div class="detail-grid">
+							<div><span>Waktu</span><strong>{timeLabel(selectedLog.createdAt)}</strong></div>
+							<div><span>Actor</span><strong>{selectedLog.actorUserId ?? '-'}</strong></div>
+							<div><span>Service</span><strong>{selectedLog.service}</strong></div>
+							<div><span>Entity</span><strong>{selectedLog.entityType} {selectedLog.entityId ?? ''}</strong></div>
+						</div>
+						<div class="detail-section">
+							<span>Deskripsi</span>
+							<p>{selectedLog.description || '-'}</p>
+						</div>
+						<div class="detail-section">
+							<span>Metadata</span>
+							<pre>{metadataLabel(selectedLog.metadataJson)}</pre>
+						</div>
 					</div>
-					<button class="btn btn-ghost icon-button" type="button" aria-label="Tutup detail" onclick={() => selectedLog = null}>
-						<Icons name="x" size={17} />
-					</button>
-				</div>
-				<div class="detail-grid">
-					<div><span>Waktu</span><strong>{timeLabel(selectedLog.createdAt)}</strong></div>
-					<div><span>Actor</span><strong>{selectedLog.actorUserId ?? '-'}</strong></div>
-					<div><span>Service</span><strong>{selectedLog.service}</strong></div>
-					<div><span>Entity</span><strong>{selectedLog.entityType} {selectedLog.entityId ?? ''}</strong></div>
-				</div>
-				<div class="detail-section">
-					<span>Deskripsi</span>
-					<p>{selectedLog.description || '-'}</p>
-				</div>
-				<div class="detail-section">
-					<span>Metadata</span>
-					<pre>{metadataLabel(selectedLog.metadataJson)}</pre>
-				</div>
+				{/key}
 			{:else}
 				<div class="detail-empty">
 					<Icons name="clipboardList" size={32} />
@@ -244,8 +259,20 @@
 
 <style>
 	.audit-toolbar {
+		position: relative;
+		overflow: hidden;
 		margin-bottom: 1.25rem;
-		padding: 1.1rem;
+		padding: 1.15rem;
+		border-color: color-mix(in srgb, var(--border) 82%, var(--primary) 18%);
+	}
+
+	.audit-toolbar::before {
+		content: '';
+		position: absolute;
+		inset: 0 0 auto;
+		height: 3px;
+		background: linear-gradient(90deg, var(--primary), #22c55e, #f59e0b);
+		opacity: 0.9;
 	}
 
 	.toolbar-head {
@@ -313,6 +340,18 @@
 	.filter-field select {
 		width: 100%;
 		min-height: 42px;
+		transition:
+			border-color 160ms ease,
+			box-shadow 160ms ease,
+			background-color 160ms ease,
+			transform 160ms ease;
+	}
+
+	.filter-field input:focus,
+	.filter-field select:focus {
+		border-color: var(--primary);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+		transform: translateY(-1px);
 	}
 
 	.mini-label,
@@ -334,6 +373,17 @@
 		white-space: nowrap;
 	}
 
+	.filter-actions .btn {
+		transition:
+			transform 160ms ease,
+			box-shadow 160ms ease,
+			background-color 160ms ease;
+	}
+
+	.filter-actions .btn:hover {
+		transform: translateY(-1px);
+	}
+
 	.audit-shell {
 		display: grid;
 		grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
@@ -347,6 +397,15 @@
 		border-radius: var(--radius-sm);
 		background: var(--bg-surface);
 		box-shadow: var(--shadow-sm);
+		transition:
+			border-color 180ms ease,
+			box-shadow 180ms ease;
+	}
+
+	.audit-list:hover,
+	.audit-detail:hover {
+		border-color: color-mix(in srgb, var(--border) 70%, var(--primary) 30%);
+		box-shadow: 0 16px 38px color-mix(in srgb, var(--text-primary) 10%, transparent);
 	}
 
 	.audit-list {
@@ -377,6 +436,7 @@
 	}
 
 	.audit-row {
+		position: relative;
 		width: 100%;
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr) auto;
@@ -389,6 +449,23 @@
 		color: inherit;
 		text-align: left;
 		cursor: pointer;
+		transition:
+			background-color 170ms ease,
+			box-shadow 170ms ease,
+			transform 170ms ease;
+	}
+
+	.audit-row::before {
+		content: '';
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: 3px;
+		background: var(--primary);
+		opacity: 0;
+		transform: scaleY(0.45);
+		transition:
+			opacity 170ms ease,
+			transform 170ms ease;
 	}
 
 	.audit-row:hover,
@@ -396,8 +473,18 @@
 		background: var(--bg-app);
 	}
 
+	.audit-row:hover {
+		transform: translateX(2px);
+	}
+
 	.audit-row.active {
-		box-shadow: inset 3px 0 0 var(--primary);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
+	}
+
+	.audit-row.active::before,
+	.audit-row:hover::before {
+		opacity: 1;
+		transform: scaleY(1);
 	}
 
 	.audit-row:last-child {
@@ -412,6 +499,35 @@
 		border-radius: var(--radius-sm);
 		background: var(--primary-soft);
 		color: var(--primary);
+		transition:
+			background-color 170ms ease,
+			color 170ms ease,
+			transform 170ms ease;
+	}
+
+	.audit-row:hover .audit-mark,
+	.audit-row.active .audit-mark {
+		transform: translateY(-1px) scale(1.03);
+	}
+
+	.audit-mark.tone-assessment {
+		background: color-mix(in srgb, #0ea5e9 15%, var(--bg-app));
+		color: #38bdf8;
+	}
+
+	.audit-mark.tone-enrollment {
+		background: color-mix(in srgb, #22c55e 16%, var(--bg-app));
+		color: #22c55e;
+	}
+
+	.audit-mark.tone-group {
+		background: color-mix(in srgb, #f59e0b 18%, var(--bg-app));
+		color: #f59e0b;
+	}
+
+	.audit-mark.tone-subject {
+		background: color-mix(in srgb, #ef4444 14%, var(--bg-app));
+		color: #f87171;
 	}
 
 	.audit-main {
@@ -448,6 +564,15 @@
 		border: 1px solid var(--border-light);
 		border-radius: 999px;
 		background: var(--bg-surface);
+		transition:
+			border-color 160ms ease,
+			background-color 160ms ease;
+	}
+
+	.audit-row:hover .entity-pill,
+	.audit-row.active .entity-pill {
+		border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+		background: color-mix(in srgb, var(--primary) 7%, var(--bg-surface));
 	}
 
 	.audit-main p {
@@ -462,6 +587,10 @@
 		position: sticky;
 		top: 1rem;
 		padding: 1.1rem;
+	}
+
+	.detail-content {
+		min-width: 0;
 	}
 
 	.detail-head {
@@ -499,6 +628,15 @@
 		border: 1px solid var(--border-light);
 		border-radius: var(--radius-sm);
 		background: var(--bg-app);
+		transition:
+			border-color 160ms ease,
+			transform 160ms ease,
+			background-color 160ms ease;
+	}
+
+	.detail-grid > div:hover {
+		border-color: color-mix(in srgb, var(--primary) 28%, var(--border-light));
+		transform: translateY(-1px);
 	}
 
 	.detail-grid strong,
@@ -529,6 +667,7 @@
 		font-size: 0.78rem;
 		line-height: 1.5;
 		white-space: pre-wrap;
+		box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 4%, transparent);
 	}
 
 	.detail-empty,
@@ -539,6 +678,41 @@
 		padding: 2rem;
 		color: var(--text-muted);
 		text-align: center;
+	}
+
+	.audit-loading::before {
+		content: '';
+		width: 28px;
+		height: 28px;
+		border: 3px solid var(--border-light);
+		border-top-color: var(--primary);
+		border-radius: 50%;
+		animation: audit-spin 800ms linear infinite;
+	}
+
+	@keyframes audit-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.audit-row,
+		.audit-row::before,
+		.audit-mark,
+		.entity-pill,
+		.filter-field input,
+		.filter-field select,
+		.filter-actions .btn,
+		.detail-grid > div,
+		.audit-list,
+		.audit-detail {
+			transition: none;
+		}
+
+		.audit-loading::before {
+			animation: none;
+		}
 	}
 
 	@media (max-width: 1180px) {

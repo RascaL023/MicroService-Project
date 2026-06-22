@@ -100,12 +100,22 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		padding: 1rem;
+		min-height: 62px;
+		padding: 0.85rem 1rem;
 		background: var(--bg-surface);
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		box-shadow: var(--shadow-sm);
-		margin-top: 1rem;
+		margin-top: clamp(1.25rem, 3vh, 2rem);
+		transition:
+			border-color var(--motion-base, 220ms ease),
+			box-shadow var(--motion-base, 220ms ease),
+			transform var(--motion-base, 220ms ease);
+	}
+
+	.pagination:hover {
+		border-color: color-mix(in srgb, var(--border) 72%, var(--primary) 28%);
+		box-shadow: var(--shadow-md);
 	}
 
 	.pagination-summary,
@@ -142,13 +152,18 @@
 		cursor: pointer;
 		display: inline-grid;
 		place-items: center;
-		transition: all 0.2s;
+		transition:
+			background-color var(--motion-fast, 160ms ease),
+			border-color var(--motion-fast, 160ms ease),
+			color var(--motion-fast, 160ms ease),
+			transform var(--motion-fast, 160ms ease);
 	}
 
 	.page-button:hover:not(:disabled) {
 		border-color: var(--primary-border);
 		color: var(--primary);
 		background: var(--primary-soft);
+		transform: translateY(-1px);
 	}
 
 	.page-button.active {
@@ -176,6 +191,7 @@
 		height: 34px;
 		width: 72px;
 		padding: 0 0.5rem;
+		min-height: 34px;
 	}
 
 	@media (max-width: 720px) {

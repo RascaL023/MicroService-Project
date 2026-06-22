@@ -92,16 +92,23 @@
 		syncTheme();
 		syncViewport();
 		window.addEventListener('session-change', sync);
+		window.addEventListener('pageshow', sync);
 		window.addEventListener('storage', syncStorage);
 		window.addEventListener('resize', syncViewport);
 		return () => {
 			window.removeEventListener('session-change', sync);
+			window.removeEventListener('pageshow', sync);
 			window.removeEventListener('storage', syncStorage);
 			window.removeEventListener('resize', syncViewport);
 		};
 	});
 
 	$effect(() => {
+		if (page.url.pathname === '/login' && session) {
+			void goto(isAdminSession(session) ? '/admin' : '/app', { replaceState: true });
+			return;
+		}
+
 		if (!isPortalRoute && !session && !isPublicRoute(page.url.pathname)) {
 			void goto('/login', { replaceState: true });
 		}

@@ -167,6 +167,14 @@
 				</button>
 			</div>
 			<form class="modal-form" onsubmit={(event) => { event.preventDefault(); void updateEmail(); }}>
+				<div class="warning-box">
+					<Icons name="alertTriangle" size={18} />
+					<p>
+						Setelah email diganti, email yang tampil pada profil dan session lokal akan ikut berubah.
+						Pastikan email baru benar dan aktif, karena perubahan ini dapat memengaruhi komunikasi administratif serta pencocokan data akun.
+					</p>
+				</div>
+
 				<label>
 					<span>Email baru</span>
 					<input bind:value={emailForm} type="email" required />
@@ -260,6 +268,29 @@
 	.detail-grid strong {
 		font-size: 0.95rem;
 		overflow-wrap: anywhere;
+	}
+
+	.warning-box {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: start;
+		padding: 0.875rem;
+		border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+		background: color-mix(in srgb, var(--warning) 10%, var(--bg-surface));
+		border-radius: var(--radius-sm);
+		color: var(--text-main);
+	}
+
+	.warning-box :global(svg) {
+		color: var(--warning);
+		margin-top: 0.125rem;
+	}
+
+	.warning-box p {
+		margin: 0;
+		font-size: 0.875rem;
+		line-height: 1.5;
 	}
 
 	@media (max-width: 640px) {
